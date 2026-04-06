@@ -358,7 +358,7 @@ export default function ResidentProfilePage() {
                 <p className="text-dark/45 text-sm">Home visitation records for this resident will appear here.</p>
               </div>
             ) : (
-              residentVisitations.map((visit, i) => (
+              residentVisitations.map((visit) => (
                 <div
                   key={visit.id}
                   className={`card hover:shadow-card-hover transition-all duration-200 border-l-4 ${visit.safetyConcern ? 'border-red-400' : 'border-teal'}`}
