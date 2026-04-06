@@ -5,10 +5,13 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
+        policy.WithOrigins(
+            "http://localhost:5173",
+            "https://zealous-tree-029394910.6.azurestaticapps.net"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+                });
 });
 
 var app = builder.Build();
