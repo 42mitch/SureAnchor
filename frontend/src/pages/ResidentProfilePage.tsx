@@ -3,15 +3,27 @@ import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, User, FileText, Home, Shield, Calendar,
   AlertTriangle, CheckCircle, Clock, ChevronRight, Activity,
-  BookOpen, Heart, MapPin, Hash
+  BookOpen, Heart, MapPin, Hash, Pencil, Trash2
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
+import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import {
+  EditResidentModal,
+  ResidentSessionEditModal,
+  ResidentVisitEditModal,
+  type SafehouseOption,
+  type ResidentDetailForm,
+  type SessionNoteRow,
+  type HomeVisitationDetail,
+} from '../components/resident/ResidentProfileAdminModals';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ResidentDetail {
   residentId: number;
+  safehouseId: number;
   caseNo: string;
   internalCode: string;
   safehouse: string;
@@ -23,6 +35,7 @@ interface ResidentDetail {
   worker: string;
   religion: string | null;
   dateAdmitted: string | null;
+  dateOfBirth: string | null;
   reintegrationType: string | null;
   reintegrationStatus: string | null;
   recentNote: string | null;
@@ -30,6 +43,8 @@ interface ResidentDetail {
 
 interface ProcessRecording {
   recordingId: number;
+  residentId: number;
+  residentCode: string;
   sessionDate: string;
   socialWorker: string;
   sessionType: string;
@@ -43,6 +58,8 @@ interface ProcessRecording {
 
 interface HomeVisitation {
   visitationId: number;
+  residentId: number;
+  residentCode: string;
   visitDate: string;
   socialWorker: string;
   visitType: string;
@@ -120,15 +137,52 @@ const TABS = [
   { id: 'visitations', label: 'Home Visitations', icon: Home },
 ];
 
+function toSessionNoteRow(n: ProcessRecording): SessionNoteRow {
+  return {
+    recordingId: n.recordingId,
+    residentId: n.residentId,
+    residentCode: n.residentCode,
+    sessionDate: n.sessionDate,
+    socialWorker: n.socialWorker,
+    sessionType: n.sessionType,
+    emotionalState: n.emotionalState,
+    narrative: n.narrative,
+    interventions: n.interventions,
+    followUp: n.followUp,
+    progressNoted: n.progressNoted,
+    concernsFlagged: n.concernsFlagged,
+  };
+}
+
 export default function ResidentProfilePage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const isAdmin = user?.roles.includes('Admin') ?? false;
+
   const [activeTab, setActiveTab] = useState('overview');
 
   const [resident, setResident] = useState<ResidentDetail | null>(null);
   const [sessions, setSessions] = useState<ProcessRecording[]>([]);
   const [visitations, setVisitations] = useState<HomeVisitation[]>([]);
+  const [safehouses, setSafehouses] = useState<SafehouseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  const [showEditResident, setShowEditResident] = useState(false);
+  const [sessionToEdit, setSessionToEdit] = useState<SessionNoteRow | null>(null);
+  const [sessionToDelete, setSessionToDelete] = useState<ProcessRecording | null>(null);
+  const [sessionDeleteLoading, setSessionDeleteLoading] = useState(false);
+  const [visitToEdit, setVisitToEdit] = useState<HomeVisitationDetail | null>(null);
+  const [visitEditLoading, setVisitEditLoading] = useState(false);
+  const [visitToDelete, setVisitToDelete] = useState<HomeVisitation | null>(null);
+  const [visitDeleteLoading, setVisitDeleteLoading] = useState(false);
+
+  function reloadResident() {
+    if (!id) return;
+    apiFetch(`/api/residents/${id}`).then(r => r.ok ? r.json() : null).then(res => {
+      if (res) setResident(res);
+    });
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -144,6 +198,58 @@ export default function ResidentProfilePage() {
       setVisitations(visits);
     }).finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    apiFetch('/api/residents/safehouses').then(r => r.ok ? r.json() : []).then(setSafehouses);
+  }, [isAdmin]);
+
+  async function openVisitEdit(v: HomeVisitation) {
+    setVisitEditLoading(true);
+    const r = await apiFetch(`/api/home-visitations/${v.visitationId}`);
+    if (r.ok) {
+      const d: HomeVisitationDetail = await r.json();
+      setVisitToEdit(d);
+    }
+    setVisitEditLoading(false);
+  }
+
+  async function handleDeleteSession() {
+    if (!sessionToDelete) return;
+    setSessionDeleteLoading(true);
+    await apiFetch(`/api/process-recordings/${sessionToDelete.recordingId}`, { method: 'DELETE' });
+    setSessions(prev => prev.filter(s => s.recordingId !== sessionToDelete.recordingId));
+    setSessionToDelete(null);
+    setSessionDeleteLoading(false);
+    reloadResident();
+  }
+
+  async function handleDeleteVisit() {
+    if (!visitToDelete) return;
+    setVisitDeleteLoading(true);
+    await apiFetch(`/api/home-visitations/${visitToDelete.visitationId}`, { method: 'DELETE' });
+    setVisitations(prev => prev.filter(v => v.visitationId !== visitToDelete.visitationId));
+    setVisitToDelete(null);
+    setVisitDeleteLoading(false);
+  }
+
+  const residentFormProps: ResidentDetailForm | null = resident
+    ? {
+        residentId: resident.residentId,
+        caseNo: resident.caseNo,
+        internalCode: resident.internalCode,
+        safehouseId: resident.safehouseId,
+        category: resident.category,
+        risk: resident.risk,
+        status: resident.status,
+        worker: resident.worker,
+        religion: resident.religion,
+        dateAdmitted: resident.dateAdmitted,
+        dateOfBirth: resident.dateOfBirth,
+        reintegrationType: resident.reintegrationType,
+        reintegrationStatus: resident.reintegrationStatus,
+      }
+    : null;
 
   if (loading) {
     return (
@@ -256,15 +362,29 @@ export default function ResidentProfilePage() {
         {activeTab === 'overview' && (
           <div className="grid lg:grid-cols-3 gap-5">
             <div className="lg:col-span-2 card">
-              <div className="flex items-center gap-2 mb-5">
-                <div className="w-8 h-8 rounded-lg bg-navy/8 flex items-center justify-center">
-                  <User size={16} className="text-navy" />
+              <div className="flex items-center justify-between gap-3 mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-navy/8 flex items-center justify-center">
+                    <User size={16} className="text-navy" />
+                  </div>
+                  <h2 className="font-display text-lg font-semibold text-navy">Demographics</h2>
                 </div>
-                <h2 className="font-display text-lg font-semibold text-navy">Demographics</h2>
+                {isAdmin && residentFormProps && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditResident(true)}
+                    disabled={safehouses.length === 0}
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal hover:text-teal-dark disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Pencil size={15} />
+                    Edit
+                  </button>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5">
                 {[
                   { label: 'Age', value: `${resident.age} years old` },
+                  { label: 'Date of Birth', value: resident.dateOfBirth?.slice(0, 10) ?? '—' },
                   { label: 'Religion', value: resident.religion ?? '—' },
                   { label: 'Case Category', value: resident.category },
                   { label: 'Date Admitted', value: resident.dateAdmitted ?? '—' },
@@ -407,6 +527,24 @@ export default function ResidentProfilePage() {
                       <p className="text-sm text-teal font-medium leading-snug">{note.followUp || '—'}</p>
                     </div>
                   </div>
+                  {isAdmin && (
+                    <div className="flex justify-end gap-2 pt-4 border-t border-dark/6 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => setSessionToEdit(toSessionNoteRow(note))}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-navy/8 text-navy hover:bg-navy/12"
+                      >
+                        <Pencil size={14} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSessionToDelete(note)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                      >
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -474,12 +612,113 @@ export default function ResidentProfilePage() {
                       {outcomeBadge(visit.outcome)}
                     </div>
                   </div>
+                  {isAdmin && (
+                    <div className="flex justify-end gap-2 pt-4 border-t border-dark/6">
+                      <button
+                        type="button"
+                        onClick={() => openVisitEdit(visit)}
+                        disabled={visitEditLoading}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-navy/8 text-navy hover:bg-navy/12 disabled:opacity-50"
+                      >
+                        <Pencil size={14} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVisitToDelete(visit)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                      >
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
           </div>
         )}
       </div>
+
+      {showEditResident && residentFormProps && safehouses.length > 0 && (
+        <EditResidentModal
+          resident={residentFormProps}
+          safehouses={safehouses}
+          onClose={() => setShowEditResident(false)}
+          onSaved={() => {
+            reloadResident();
+          }}
+        />
+      )}
+      {sessionToEdit && id && resident && (
+        <ResidentSessionEditModal
+          note={sessionToEdit}
+          residentId={parseInt(id, 10)}
+          residentCode={sessionToEdit.residentCode}
+          onClose={() => setSessionToEdit(null)}
+          onSaved={updated => {
+            setSessions(prev =>
+              prev.map(s =>
+                s.recordingId === updated.recordingId
+                  ? {
+                      ...s,
+                      sessionDate: updated.sessionDate,
+                      socialWorker: updated.socialWorker,
+                      sessionType: updated.sessionType,
+                      emotionalState: updated.emotionalState,
+                      narrative: updated.narrative,
+                      interventions: updated.interventions,
+                      followUp: updated.followUp,
+                      progressNoted: updated.progressNoted,
+                      concernsFlagged: updated.concernsFlagged,
+                    }
+                  : s
+              )
+            );
+            reloadResident();
+          }}
+        />
+      )}
+      {visitToEdit && (
+        <ResidentVisitEditModal
+          initial={visitToEdit}
+          onClose={() => setVisitToEdit(null)}
+          onSaved={updated => {
+            setVisitations(prev =>
+              prev.map(v =>
+                v.visitationId === updated.visitationId
+                  ? {
+                      ...v,
+                      visitDate: updated.visitDate,
+                      socialWorker: updated.socialWorker,
+                      visitType: updated.visitType,
+                      familyCooperation: updated.familyCooperationLevel || '',
+                      safetyConcern: updated.safetyConcernsNoted,
+                      followUpNeeded: updated.followUpNeeded,
+                      outcome: updated.visitOutcome || '',
+                    }
+                  : v
+              )
+            );
+          }}
+        />
+      )}
+      {sessionToDelete && (
+        <ConfirmDeleteModal
+          title="Delete session note"
+          description={`Permanently delete session note #${sessionToDelete.recordingId}? This cannot be undone.`}
+          onConfirm={handleDeleteSession}
+          onCancel={() => setSessionToDelete(null)}
+          loading={sessionDeleteLoading}
+        />
+      )}
+      {visitToDelete && (
+        <ConfirmDeleteModal
+          title="Delete home visitation"
+          description={`Permanently delete home visit #${visitToDelete.visitationId}? This cannot be undone.`}
+          onConfirm={handleDeleteVisit}
+          onCancel={() => setVisitToDelete(null)}
+          loading={visitDeleteLoading}
+        />
+      )}
     </AdminLayout>
   );
 }

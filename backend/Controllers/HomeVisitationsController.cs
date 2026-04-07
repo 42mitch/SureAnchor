@@ -40,6 +40,35 @@ public class HomeVisitationsController : ControllerBase
         return Ok(list);
     }
 
+    // ── GET /api/home-visitations/{id} ────────────────────────────────────────
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var v = await _db.HomeVisitations
+            .Include(x => x.Resident)
+            .FirstOrDefaultAsync(x => x.VisitationId == id);
+        if (v == null) return NotFound();
+
+        var dto = new HomeVisitationDetailDto(
+            v.VisitationId,
+            v.ResidentId,
+            v.Resident.InternalCode,
+            v.VisitDate.ToString("yyyy-MM-dd"),
+            v.SocialWorker,
+            v.VisitType,
+            v.FamilyCooperationLevel,
+            v.SafetyConcernsNoted,
+            v.FollowUpNeeded,
+            v.FollowUpNotes,
+            v.VisitOutcome,
+            v.Purpose,
+            v.Observations,
+            v.LocationVisited,
+            v.FamilyMembersPresent
+        );
+        return Ok(dto);
+    }
+
     // ── POST /api/home-visitations ────────────────────────────────────────────
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] HomeVisitationWriteDto dto)
@@ -58,6 +87,8 @@ public class HomeVisitationsController : ControllerBase
             VisitOutcome = dto.VisitOutcome,
             Purpose = dto.Purpose,
             Observations = dto.Observations,
+            LocationVisited = dto.LocationVisited,
+            FamilyMembersPresent = dto.FamilyMembersPresent,
         };
         _db.HomeVisitations.Add(visit);
         await _db.SaveChangesAsync();
@@ -66,6 +97,7 @@ public class HomeVisitationsController : ControllerBase
 
     // ── PUT /api/home-visitations/{id} ────────────────────────────────────────
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] HomeVisitationWriteDto dto)
     {
         var visit = await _db.HomeVisitations.FindAsync(id);
@@ -82,6 +114,8 @@ public class HomeVisitationsController : ControllerBase
         visit.VisitOutcome = dto.VisitOutcome;
         visit.Purpose = dto.Purpose;
         visit.Observations = dto.Observations;
+        visit.LocationVisited = dto.LocationVisited;
+        visit.FamilyMembersPresent = dto.FamilyMembersPresent;
 
         await _db.SaveChangesAsync();
         return NoContent();
@@ -115,6 +149,24 @@ public record HomeVisitationDto(
     string Outcome
 );
 
+public record HomeVisitationDetailDto(
+    int VisitationId,
+    int ResidentId,
+    string ResidentCode,
+    string VisitDate,
+    string SocialWorker,
+    string VisitType,
+    string? FamilyCooperationLevel,
+    bool SafetyConcernsNoted,
+    bool FollowUpNeeded,
+    string? FollowUpNotes,
+    string? VisitOutcome,
+    string? Purpose,
+    string? Observations,
+    string? LocationVisited,
+    string? FamilyMembersPresent
+);
+
 public record HomeVisitationWriteDto(
     int ResidentId,
     string VisitDate,
@@ -126,5 +178,7 @@ public record HomeVisitationWriteDto(
     string? FollowUpNotes,
     string? VisitOutcome,
     string? Purpose,
-    string? Observations
+    string? Observations,
+    string? LocationVisited = null,
+    string? FamilyMembersPresent = null
 );
