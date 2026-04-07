@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { HeartHandshake, TrendingUp, MapPin, LogOut, Heart, X } from 'lucide-react';
+import { HeartHandshake, TrendingUp, Clock, CalendarCheck, LogOut, Heart, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
@@ -101,6 +101,32 @@ export default function DonorPortalPage() {
 
   const totalGiven = donations.reduce((sum, d) => sum + (d.amount ?? d.estimatedValue ?? 0), 0);
   const totalAllocated = impact.reduce((sum, i) => sum + i.amountAllocated, 0);
+
+  // Time helpers
+  function formatDuration(fromDate: Date, toDate: Date = new Date()): string {
+    const diffMs = toDate.getTime() - fromDate.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (days < 1) return 'Today';
+    if (days === 1) return '1 day';
+    if (days < 30) return `${days} days`;
+    const months = Math.floor(days / 30.44);
+    if (months < 12) return months === 1 ? '1 month' : `${months} months`;
+    const years = Math.floor(months / 12);
+    const rem = months % 12;
+    if (rem === 0) return years === 1 ? '1 year' : `${years} years`;
+    return `${years}y ${rem}m`;
+  }
+
+  const sortedDates = donations
+    .map(d => new Date(d.donationDate))
+    .filter(d => !isNaN(d.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  const firstDonationDate = sortedDates[0];
+  const lastDonationDate = sortedDates[sortedDates.length - 1];
+
+  const timeAsDonor = firstDonationDate ? formatDuration(firstDonationDate) : '—';
+  const timeSinceLast = lastDonationDate ? formatDuration(lastDonationDate) : '—';
   const programTotals = impact.reduce<Record<string, number>>((acc, a) => {
     acc[a.programArea] = (acc[a.programArea] ?? 0) + a.amountAllocated;
     return acc;
@@ -151,19 +177,20 @@ export default function DonorPortalPage() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Total Given', value: `₱${totalGiven.toLocaleString()}`, icon: HeartHandshake, color: 'text-gold', bg: 'bg-gold/10' },
             { label: 'Donations Made', value: donations.length.toString(), icon: TrendingUp, color: 'text-teal', bg: 'bg-teal/10' },
-            { label: 'Safehouses Supported', value: new Set(impact.map(i => i.name)).size.toString(), icon: MapPin, color: 'text-navy', bg: 'bg-navy/8' },
+            { label: 'Time as a Donor', value: timeAsDonor, icon: Clock, color: 'text-navy', bg: 'bg-navy/8' },
+            { label: 'Since Last Donation', value: timeSinceLast, icon: CalendarCheck, color: 'text-teal-dark', bg: 'bg-teal/8' },
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <div key={label} className="bg-white rounded-2xl shadow-sm border border-dark/6 p-5 flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bg}`}>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
                 <Icon size={22} className={color} strokeWidth={1.8} />
               </div>
-              <div>
-                <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
-                <div className="text-sm text-dark/55 font-medium">{label}</div>
+              <div className="min-w-0">
+                <div className={`font-display text-xl font-bold leading-tight ${color}`}>{value}</div>
+                <div className="text-xs text-dark/55 font-medium mt-0.5">{label}</div>
               </div>
             </div>
           ))}
