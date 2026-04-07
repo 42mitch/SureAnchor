@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
-import { HeartHandshake, Users, Sparkles, Plus, X, Trash2, Search } from 'lucide-react';
+import {
+  HeartHandshake, Users, Sparkles, Plus, X, Trash2, Search,
+  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw
+} from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Supporter {
   supporterId: number;
@@ -15,6 +20,41 @@ interface Supporter {
   country: string | null;
   email: string | null;
 }
+
+interface SupporterDetail {
+  supporterId: number;
+  displayName: string;
+  supporterType: string;
+  firstName: string | null;
+  lastName: string | null;
+  organizationName: string | null;
+  email: string | null;
+  phone: string | null;
+  country: string | null;
+  region: string | null;
+  relationshipType: string | null;
+  acquisitionChannel: string | null;
+  status: string;
+  firstDonationDate: string | null;
+  createdAt: string;
+  donations: DonationRow[];
+}
+
+interface DonationRow {
+  donationId: number;
+  donationType: string;
+  donationDate: string;
+  isRecurring: boolean;
+  campaignName: string | null;
+  channelSource: string | null;
+  currencyCode: string;
+  amount: number | null;
+  estimatedValue: number | null;
+  impactUnit: string | null;
+  notes: string | null;
+}
+
+// ─── Badges ───────────────────────────────────────────────────────────────────
 
 const typeBadge = (type: string) => {
   const map: Record<string, string> = {
@@ -36,6 +76,181 @@ const typeBadge = (type: string) => {
     </span>
   );
 };
+
+// ─── Donor Detail Modal ───────────────────────────────────────────────────────
+
+function DonorDetailModal({ supporterId, onClose }: { supporterId: number; onClose: () => void }) {
+  const [detail, setDetail] = useState<SupporterDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`/api/supporters/${supporterId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(setDetail)
+      .finally(() => setLoading(false));
+  }, [supporterId]);
+
+  const totalGiven = detail?.donations.reduce((sum, d) => sum + (d.amount ?? d.estimatedValue ?? 0), 0) ?? 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in">
+
+        {/* Header */}
+        <div className="sticky top-0 bg-white rounded-t-3xl border-b border-dark/8 z-10">
+          <div className="bg-gradient-to-r from-navy to-teal-dark rounded-t-3xl px-6 py-5 text-white">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+                  {detail?.displayName.charAt(0) ?? '?'}
+                </div>
+                <div>
+                  <h2 className="font-display text-xl font-bold">
+                    {loading ? 'Loading...' : detail?.displayName}
+                  </h2>
+                  {detail && (
+                    <div className="flex items-center gap-2 mt-1">
+                      {typeBadge(detail.supporterType)}
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${detail.status === 'Active' ? 'bg-green-400/20 text-green-200' : 'bg-white/20 text-white/60'}`}>
+                        {detail.status}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button onClick={onClose} className="text-white/60 hover:text-white transition-colors mt-1">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Summary stats */}
+            {detail && (
+              <div className="grid grid-cols-3 gap-3 mt-4">
+                {[
+                  { label: 'Total Given', value: `₱${totalGiven.toLocaleString()}`, icon: HeartHandshake },
+                  { label: 'Donations', value: detail.donations.length.toString(), icon: TrendingUp },
+                  { label: 'Since', value: detail.firstDonationDate ?? '—', icon: Calendar },
+                ].map(({ label, value, icon: Icon }) => (
+                  <div key={label} className="bg-white/10 rounded-xl px-3 py-2.5 text-center">
+                    <Icon size={14} className="text-white/60 mx-auto mb-1" />
+                    <div className="font-display text-base font-bold text-white">{value}</div>
+                    <div className="text-xs text-white/50">{label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <div className="w-8 h-8 rounded-full border-4 border-teal border-t-transparent animate-spin" />
+          </div>
+        ) : !detail ? (
+          <div className="py-12 text-center text-dark/40 text-sm">Could not load donor details.</div>
+        ) : (
+          <div className="p-6 space-y-6">
+
+            {/* Contact & Info */}
+            <div className="grid sm:grid-cols-2 gap-4">
+              {[
+                detail.email         && { icon: Mail,      label: 'Email',        value: detail.email },
+                detail.phone         && { icon: Phone,     label: 'Phone',        value: detail.phone },
+                detail.country       && { icon: Globe,     label: 'Country',      value: detail.country },
+                detail.region        && { icon: MapPin,    label: 'Region',       value: detail.region },
+                detail.organizationName && { icon: Users,  label: 'Organization', value: detail.organizationName },
+                detail.relationshipType && { icon: Tag,    label: 'Relationship', value: detail.relationshipType },
+                detail.acquisitionChannel && { icon: RefreshCw, label: 'How They Found Us', value: detail.acquisitionChannel },
+                { icon: Calendar, label: 'Supporter Since', value: detail.createdAt },
+              ].filter(Boolean).map((item: any) => (
+                <div key={item.label} className="flex items-start gap-3 bg-cream/60 rounded-xl px-4 py-3">
+                  <div className="w-7 h-7 rounded-lg bg-navy/8 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <item.icon size={13} className="text-navy" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide">{item.label}</p>
+                    <p className="text-sm font-semibold text-dark mt-0.5">{item.value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Donation History */}
+            <div>
+              <h3 className="font-display text-base font-semibold text-navy mb-3 flex items-center gap-2">
+                <HeartHandshake size={16} className="text-gold" />
+                Donation History
+                <span className="text-xs font-normal text-dark/40 bg-dark/6 px-2 py-0.5 rounded-full ml-1">
+                  {detail.donations.length} {detail.donations.length === 1 ? 'donation' : 'donations'}
+                </span>
+              </h3>
+
+              {detail.donations.length === 0 ? (
+                <div className="bg-cream/60 rounded-2xl py-8 text-center text-dark/40 text-sm">
+                  No donations recorded yet.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {detail.donations.map((d) => (
+                    <div key={d.donationId} className="bg-cream/60 rounded-xl px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center flex-shrink-0">
+                          <HeartHandshake size={14} className="text-gold" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-dark">{d.campaignName ?? 'General Donation'}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${d.donationType === 'Monetary' ? 'bg-gold/15 text-yellow-700' : 'bg-purple-100 text-purple-700'}`}>
+                              {d.donationType}
+                            </span>
+                            {d.isRecurring && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal/10 text-teal-dark">
+                                Recurring
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-xs text-dark/40">{d.donationDate}</span>
+                            {d.channelSource && <span className="text-xs text-dark/30">via {d.channelSource}</span>}
+                          </div>
+                          {d.notes && <p className="text-xs text-dark/50 italic mt-1">"{d.notes}"</p>}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        {d.amount != null ? (
+                          <span className="font-display text-lg font-bold text-navy">
+                            {d.currencyCode} {d.amount.toLocaleString()}
+                          </span>
+                        ) : d.estimatedValue != null ? (
+                          <span className="text-sm font-semibold text-dark/60">
+                            ~₱{d.estimatedValue.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-dark/30 italic">In-kind / Time</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Total row */}
+                  {totalGiven > 0 && (
+                    <div className="bg-navy/5 rounded-xl px-4 py-3 flex items-center justify-between border border-navy/10">
+                      <span className="text-sm font-semibold text-navy">Total Contributed</span>
+                      <span className="font-display text-xl font-bold text-navy">₱{totalGiven.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Supporter Modal ──────────────────────────────────────────────────────
 
 function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved: (s: Supporter) => void }) {
   const [saving, setSaving] = useState(false);
@@ -68,51 +283,51 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         <form className="p-6 space-y-4" onSubmit={handleSubmit}>
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Display Name *</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Display Name *</label>
               <input type="text" required value={form.displayName} onChange={e => set('displayName', e.target.value)} placeholder="e.g. Marisol Foundation"
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">First Name</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">First Name</label>
               <input type="text" value={form.firstName} onChange={e => set('firstName', e.target.value)} placeholder="Optional"
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Last Name</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Last Name</label>
               <input type="text" value={form.lastName} onChange={e => set('lastName', e.target.value)} placeholder="Optional"
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Organization</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Organization</label>
               <input type="text" value={form.organizationName} onChange={e => set('organizationName', e.target.value)} placeholder="Optional"
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Email</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Email</label>
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="Optional"
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Country</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Country</label>
               <input type="text" value={form.country} onChange={e => set('country', e.target.value)} placeholder="Philippines"
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Supporter Type</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Supporter Type</label>
               <select value={form.supporterType} onChange={e => set('supporterType', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                 {['MonetaryDonor','InKindDonor','Volunteer','SkillsContributor','SocialMediaAdvocate','PartnerOrganization'].map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Status</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Status</label>
               <select value={form.status} onChange={e => set('status', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                 <option>Active</option><option>Inactive</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Acquisition Channel</label>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Acquisition Channel</label>
               <select value={form.acquisitionChannel} onChange={e => set('acquisitionChannel', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                 <option value="">Select...</option>
@@ -130,6 +345,8 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function DonorsPage() {
   const { user } = useAuth();
   const isAdmin = user?.roles.includes('Admin') ?? false;
@@ -138,6 +355,7 @@ export default function DonorsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Supporter | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -223,14 +441,18 @@ export default function DonorsPage() {
                 </thead>
                 <tbody>
                   {filtered.map((s, i) => (
-                    <tr key={s.supporterId} className={`border-b border-dark/5 hover:bg-teal/3 transition-colors last:border-0 ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}>
+                    <tr
+                      key={s.supporterId}
+                      onClick={() => setSelectedId(s.supporterId)}
+                      className={`border-b border-dark/5 hover:bg-teal/5 transition-colors last:border-0 cursor-pointer ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}
+                    >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-navy/8 flex items-center justify-center text-navy text-xs font-bold flex-shrink-0">
                             {s.displayName.charAt(0)}
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-dark">{s.displayName}</p>
+                            <p className="text-sm font-semibold text-dark hover:text-teal transition-colors">{s.displayName}</p>
                             {s.email && <p className="text-xs text-dark/40">{s.email}</p>}
                           </div>
                         </div>
@@ -249,9 +471,13 @@ export default function DonorsPage() {
                       </td>
                       <td className="px-5 py-3.5 text-sm text-dark/60">{s.lastDonationDate ?? '—'}</td>
                       <td className="px-5 py-3.5 text-sm text-dark/60">{s.country ?? '—'}</td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
                         {isAdmin && (
-                          <button onClick={() => setDeleteTarget(s)} className="p-1.5 rounded-lg text-dark/25 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                          <button
+                            onClick={() => setDeleteTarget(s)}
+                            className="p-1.5 rounded-lg text-dark/25 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Delete"
+                          >
                             <Trash2 size={15} />
                           </button>
                         )}
@@ -260,20 +486,32 @@ export default function DonorsPage() {
                   ))}
                 </tbody>
               </table>
+              <p className="text-xs text-dark/30 text-center py-3">Click a row to view full donor profile and donation history</p>
             </div>
           )}
         </div>
       </div>
 
-      {showAddModal && (
-        <AddSupporterModal onClose={() => setShowAddModal(false)}
-          onSaved={(s) => { setSupporters(prev => [...prev, s]); setShowAddModal(false); }} />
+      {/* Donor detail modal */}
+      {selectedId !== null && (
+        <DonorDetailModal supporterId={selectedId} onClose={() => setSelectedId(null)} />
       )}
+
+      {showAddModal && (
+        <AddSupporterModal
+          onClose={() => setShowAddModal(false)}
+          onSaved={(s) => { setSupporters(prev => [...prev, s]); setShowAddModal(false); }}
+        />
+      )}
+
       {deleteTarget && (
         <ConfirmDeleteModal
           title="Delete Supporter"
           description={`Are you sure you want to permanently delete "${deleteTarget.displayName}"? All associated donations will also be removed.`}
-          onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} loading={deleteLoading} />
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+          loading={deleteLoading}
+        />
       )}
     </AdminLayout>
   );

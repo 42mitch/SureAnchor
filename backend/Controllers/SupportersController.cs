@@ -41,7 +41,38 @@ public class SupportersController : ControllerBase
             .Include(s => s.Donations)
             .FirstOrDefaultAsync(s => s.SupporterId == id);
         if (s == null) return NotFound();
-        return Ok(s);
+
+        var dto = new SupporterDetailDto(
+            s.SupporterId,
+            s.DisplayName,
+            s.SupporterType,
+            s.FirstName,
+            s.LastName,
+            s.OrganizationName,
+            s.Email,
+            s.Phone,
+            s.Country,
+            s.Region,
+            s.RelationshipType,
+            s.AcquisitionChannel,
+            s.Status,
+            s.FirstDonationDate?.ToString("yyyy-MM-dd"),
+            s.CreatedAt.ToString("yyyy-MM-dd"),
+            s.Donations.OrderByDescending(d => d.DonationDate).Select(d => new SupporterDonationDto(
+                d.DonationId,
+                d.DonationType,
+                d.DonationDate.ToString("yyyy-MM-dd"),
+                d.IsRecurring,
+                d.CampaignName,
+                d.ChannelSource,
+                d.CurrencyCode ?? "PHP",
+                d.Amount,
+                d.EstimatedValue,
+                d.ImpactUnit,
+                d.Notes
+            )).ToList()
+        );
+        return Ok(dto);
     }
 
     // ── POST /api/supporters ──────────────────────────────────────────────────
@@ -114,6 +145,39 @@ public record SupporterListDto(
     string? LastDonationDate,
     string? Country,
     string? Email
+);
+
+public record SupporterDetailDto(
+    int SupporterId,
+    string DisplayName,
+    string SupporterType,
+    string? FirstName,
+    string? LastName,
+    string? OrganizationName,
+    string? Email,
+    string? Phone,
+    string? Country,
+    string? Region,
+    string? RelationshipType,
+    string? AcquisitionChannel,
+    string Status,
+    string? FirstDonationDate,
+    string CreatedAt,
+    List<SupporterDonationDto> Donations
+);
+
+public record SupporterDonationDto(
+    int DonationId,
+    string DonationType,
+    string DonationDate,
+    bool IsRecurring,
+    string? CampaignName,
+    string? ChannelSource,
+    string CurrencyCode,
+    decimal? Amount,
+    decimal? EstimatedValue,
+    string? ImpactUnit,
+    string? Notes
 );
 
 public record SupporterWriteDto(
