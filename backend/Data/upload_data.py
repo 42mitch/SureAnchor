@@ -233,7 +233,7 @@ def transform_residents(df):
             clean_datetime(r.get("created_at")),
             clean_str(r.get("notes_restricted")),
         ))
-    placeholders = ",".join(["?"] * 50)
+    placeholders = ",".join(["?"] * 49)
     sql = f"""
         INSERT INTO residents
             (resident_id,case_control_no,internal_code,safehouse_id,case_status,sex,
