@@ -286,7 +286,7 @@ export default function ImpactPage() {
             <p className="text-white/75 text-sm leading-relaxed mb-6">
               ₱5,000 provides one month of counseling for a survivor. ₱15,000 covers educational materials for a safe house for a term. Every peso anchors a young woman's hope.
             </p>
-            <a href="#" className="inline-flex items-center gap-2 bg-white text-teal font-semibold px-5 py-2.5 rounded-lg hover:bg-gold hover:text-navy transition-all text-sm">
+            <a href="/login" className="inline-flex items-center gap-2 bg-white text-teal font-semibold px-5 py-2.5 rounded-lg hover:bg-gold hover:text-navy transition-all text-sm">
               Support Our Mission
               <ArrowRight size={16} />
             </a>
