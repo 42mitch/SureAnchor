@@ -5,6 +5,8 @@ import {
 import { TrendingUp, Award } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { donationTrend, residentOutcomes, safehousePerformance } from '../data/mockData';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 
 const CustomTooltipPeso = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
@@ -19,6 +21,8 @@ const CustomTooltipPeso = ({ active, payload, label }: any) => {
 };
 
 export default function ReportsPage() {
+  const shPag = useListPagination(safehousePerformance, []);
+
   return (
     <AdminLayout>
       <div className="space-y-6 animate-fade-in">
@@ -127,8 +131,8 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {safehousePerformance.map((sh, i) => (
-                  <tr key={sh.name} className={`border-b border-dark/5 last:border-0 ${i % 2 === 0 ? '' : 'bg-cream/30'}`}>
+                {shPag.pageItems.map((sh, i) => (
+                  <tr key={sh.name} className={`border-b border-dark/5 last:border-0 ${(shPag.startIndex + i) % 2 === 0 ? '' : 'bg-cream/30'}`}>
                     <td className="px-5 py-4 font-semibold text-sm text-navy">{sh.name}</td>
                     <td className="px-5 py-4 text-sm text-dark/70">{sh.residents}</td>
                     <td className="px-5 py-4">
@@ -157,6 +161,16 @@ export default function ReportsPage() {
               </tbody>
             </table>
           </div>
+          <ListPaginationBar
+            page={shPag.page}
+            pageCount={shPag.pageCount}
+            pageSize={shPag.pageSize}
+            setPage={shPag.setPage}
+            setPageSize={shPag.setPageSize}
+            total={shPag.total}
+            startIndex={shPag.startIndex}
+            endIndex={shPag.endIndex}
+          />
         </div>
       </div>
     </AdminLayout>

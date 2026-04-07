@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 
 interface Donation {
   donationId: number;
@@ -132,6 +134,9 @@ export default function DonorPortalPage() {
     return acc;
   }, {});
 
+  const donPag = useListPagination(donations, [donations.length]);
+  const impactPag = useListPagination(impact, [impact.length]);
+
   return (
     <div className="min-h-screen bg-cream font-sans">
       {/* Nav */}
@@ -228,35 +233,47 @@ export default function DonorPortalPage() {
                   </button>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-cream/60 border-b border-dark/8">
-                        {['Date', 'Type', 'Campaign', 'Amount', 'Notes'].map(h => (
-                          <th key={h} className="text-left text-xs font-semibold text-dark/40 uppercase tracking-wide px-5 py-3 whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {donations.map((d, i) => (
-                        <tr key={d.donationId} className={`border-b border-dark/5 last:border-0 ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}>
-                          <td className="px-5 py-3.5 text-sm text-dark/70 whitespace-nowrap">{d.donationDate}</td>
-                          <td className="px-5 py-3.5">
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal/10 text-teal-dark">{d.donationType}</span>
-                          </td>
-                          <td className="px-5 py-3.5 text-sm text-dark/60">{d.campaignName ?? '—'}</td>
-                          <td className="px-5 py-3.5">
-                            {d.amount != null
-                              ? <span className="text-sm font-semibold text-navy">₱{d.amount.toLocaleString()}</span>
-                              : <span className="text-sm text-dark/40 italic">In-kind / Time</span>
-                            }
-                          </td>
-                          <td className="px-5 py-3.5 text-sm text-dark/50">{d.notes ?? '—'}</td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-cream/60 border-b border-dark/8">
+                          {['Date', 'Type', 'Campaign', 'Amount', 'Notes'].map(h => (
+                            <th key={h} className="text-left text-xs font-semibold text-dark/40 uppercase tracking-wide px-5 py-3 whitespace-nowrap">{h}</th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {donPag.pageItems.map((d, i) => (
+                          <tr key={d.donationId} className={`border-b border-dark/5 last:border-0 ${(donPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}>
+                            <td className="px-5 py-3.5 text-sm text-dark/70 whitespace-nowrap">{d.donationDate}</td>
+                            <td className="px-5 py-3.5">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal/10 text-teal-dark">{d.donationType}</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-sm text-dark/60">{d.campaignName ?? '—'}</td>
+                            <td className="px-5 py-3.5">
+                              {d.amount != null
+                                ? <span className="text-sm font-semibold text-navy">₱{d.amount.toLocaleString()}</span>
+                                : <span className="text-sm text-dark/40 italic">In-kind / Time</span>
+                              }
+                            </td>
+                            <td className="px-5 py-3.5 text-sm text-dark/50">{d.notes ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <ListPaginationBar
+                    page={donPag.page}
+                    pageCount={donPag.pageCount}
+                    pageSize={donPag.pageSize}
+                    setPage={donPag.setPage}
+                    setPageSize={donPag.setPageSize}
+                    total={donPag.total}
+                    startIndex={donPag.startIndex}
+                    endIndex={donPag.endIndex}
+                  />
+                </>
               )}
             </div>
 
@@ -293,8 +310,8 @@ export default function DonorPortalPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {impact.map((a, i) => (
-                        <tr key={a.allocationId} className={`border-b border-dark/5 last:border-0 ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}>
+                      {impactPag.pageItems.map((a, i) => (
+                        <tr key={a.allocationId} className={`border-b border-dark/5 last:border-0 ${(impactPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}>
                           <td className="px-5 py-3.5 text-sm font-semibold text-navy">{a.name}</td>
                           <td className="px-5 py-3.5">
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-navy/8 text-navy">{a.programArea}</span>
@@ -306,6 +323,16 @@ export default function DonorPortalPage() {
                     </tbody>
                   </table>
                 </div>
+                <ListPaginationBar
+                  page={impactPag.page}
+                  pageCount={impactPag.pageCount}
+                  pageSize={impactPag.pageSize}
+                  setPage={impactPag.setPage}
+                  setPageSize={impactPag.setPageSize}
+                  total={impactPag.total}
+                  startIndex={impactPag.startIndex}
+                  endIndex={impactPag.endIndex}
+                />
               </div>
             )}
           </>

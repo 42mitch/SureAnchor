@@ -2,10 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, AlertTriangle, CheckCircle, FileText,
-  ChevronRight, User, ChevronDown, ClipboardX, X,
+  ChevronRight, User, ClipboardX, X,
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -318,9 +320,6 @@ function IncidentCard({ incident, resolving, removing, onResolve, onViewProfile,
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-const INITIAL_SHOW = 5;
-const LOAD_MORE_COUNT = 10;
-
 export default function SafetyPage() {
   const navigate = useNavigate();
   const [flags, setFlags] = useState<Flag[]>([]);
@@ -333,8 +332,6 @@ export default function SafetyPage() {
   const [resolvingFlags, setResolvingFlags] = useState<Set<number>>(new Set());
   const [resolvingIncidents, setResolvingIncidents] = useState<Set<number>>(new Set());
 
-  const [flagsVisible, setFlagsVisible] = useState(INITIAL_SHOW);
-  const [incidentsVisible, setIncidentsVisible] = useState(INITIAL_SHOW);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
   useEffect(() => {
@@ -385,10 +382,10 @@ export default function SafetyPage() {
   }
 
   const totalAlerts = flags.length + incidents.length;
-  const visibleFlags = flags.slice(0, flagsVisible);
-  const visibleIncidents = incidents.slice(0, incidentsVisible);
-  const hasMoreFlags = flags.length > flagsVisible;
-  const hasMoreIncidents = incidents.length > incidentsVisible;
+
+  const criticalPag = useListPagination(criticalResidents, [criticalResidents.length]);
+  const flagsPag = useListPagination(flags, [flags.length]);
+  const incidentsPag = useListPagination(incidents, [incidents.length]);
 
   return (
     <AdminLayout>
@@ -446,9 +443,9 @@ export default function SafetyPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {criticalResidents.map((r, i) => (
+                        {criticalPag.pageItems.map((r, i) => (
                           <tr key={r.residentId} onClick={() => navigate(`/admin/resident/${r.residentId}`)}
-                            className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-red-50/40 transition-colors group ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}>
+                            className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-red-50/40 transition-colors group ${(criticalPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}>
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-2.5">
                                 <div className="w-8 h-8 rounded-full bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0">
@@ -470,6 +467,16 @@ export default function SafetyPage() {
                       </tbody>
                     </table>
                   </div>
+                  <ListPaginationBar
+                    page={criticalPag.page}
+                    pageCount={criticalPag.pageCount}
+                    pageSize={criticalPag.pageSize}
+                    setPage={criticalPag.setPage}
+                    setPageSize={criticalPag.setPageSize}
+                    total={criticalPag.total}
+                    startIndex={criticalPag.startIndex}
+                    endIndex={criticalPag.endIndex}
+                  />
                 </div>
               )}
             </section>
@@ -496,7 +503,7 @@ export default function SafetyPage() {
                   </div>
                 ) : (
                   <div>
-                    {visibleFlags.map(flag => (
+                    {flagsPag.pageItems.map(flag => (
                       <FlagCard
                         key={flag.recordingId}
                         flag={flag}
@@ -506,15 +513,17 @@ export default function SafetyPage() {
                         onViewProfile={() => navigate(`/admin/resident/${flag.residentId}`)}
                       />
                     ))}
-                    {hasMoreFlags && (
-                      <button
-                        onClick={() => setFlagsVisible(c => c + LOAD_MORE_COUNT)}
-                        className="w-full py-3 rounded-xl border border-dark/12 text-dark/50 text-sm font-semibold hover:bg-cream hover:text-dark/70 transition-colors flex items-center justify-center gap-2 mt-1"
-                      >
-                        <ChevronDown size={15} />
-                        Load more ({flags.length - flagsVisible} remaining)
-                      </button>
-                    )}
+                    <ListPaginationBar
+                      page={flagsPag.page}
+                      pageCount={flagsPag.pageCount}
+                      pageSize={flagsPag.pageSize}
+                      setPage={flagsPag.setPage}
+                      setPageSize={flagsPag.setPageSize}
+                      total={flagsPag.total}
+                      startIndex={flagsPag.startIndex}
+                      endIndex={flagsPag.endIndex}
+                      className="rounded-xl border border-dark/8 mt-2 !bg-cream/40"
+                    />
                   </div>
                 )}
               </section>
@@ -538,7 +547,7 @@ export default function SafetyPage() {
                   </div>
                 ) : (
                   <div>
-                    {visibleIncidents.map(incident => (
+                    {incidentsPag.pageItems.map(incident => (
                       <IncidentCard
                         key={incident.incidentId}
                         incident={incident}
@@ -549,15 +558,17 @@ export default function SafetyPage() {
                         onClick={() => setSelectedIncident(incident)}
                       />
                     ))}
-                    {hasMoreIncidents && (
-                      <button
-                        onClick={() => setIncidentsVisible(c => c + LOAD_MORE_COUNT)}
-                        className="w-full py-3 rounded-xl border border-dark/12 text-dark/50 text-sm font-semibold hover:bg-cream hover:text-dark/70 transition-colors flex items-center justify-center gap-2 mt-1"
-                      >
-                        <ChevronDown size={15} />
-                        Load more ({incidents.length - incidentsVisible} remaining)
-                      </button>
-                    )}
+                    <ListPaginationBar
+                      page={incidentsPag.page}
+                      pageCount={incidentsPag.pageCount}
+                      pageSize={incidentsPag.pageSize}
+                      setPage={incidentsPag.setPage}
+                      setPageSize={incidentsPag.setPageSize}
+                      total={incidentsPag.total}
+                      startIndex={incidentsPag.startIndex}
+                      endIndex={incidentsPag.endIndex}
+                      className="rounded-xl border border-dark/8 mt-2 !bg-cream/40"
+                    />
                   </div>
                 )}
               </section>

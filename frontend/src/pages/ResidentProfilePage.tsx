@@ -9,6 +9,8 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 import {
   EditResidentModal,
   ResidentSessionEditModal,
@@ -176,6 +178,9 @@ export default function ResidentProfilePage() {
   const [visitEditLoading, setVisitEditLoading] = useState(false);
   const [visitToDelete, setVisitToDelete] = useState<HomeVisitation | null>(null);
   const [visitDeleteLoading, setVisitDeleteLoading] = useState(false);
+
+  const sessPag = useListPagination(sessions, [id, sessions.length]);
+  const visitPag = useListPagination(visitations, [id, visitations.length]);
 
   function reloadResident() {
     if (!id) return;
@@ -480,12 +485,13 @@ export default function ResidentProfilePage() {
                 <p className="text-dark/45 text-sm">Session notes for this resident will appear here.</p>
               </div>
             ) : (
-              sessions.map((note, i) => (
+              <>
+              {sessPag.pageItems.map((note, i) => (
                 <div key={note.recordingId} className="card hover:shadow-card-hover transition-all duration-200">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-xl bg-navy/8 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-navy font-bold text-xs">#{i + 1}</span>
+                        <span className="text-navy font-bold text-xs">#{sessPag.startIndex + i + 1}</span>
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -546,7 +552,18 @@ export default function ResidentProfilePage() {
                     </div>
                   )}
                 </div>
-              ))
+              ))}
+              <ListPaginationBar
+                page={sessPag.page}
+                pageCount={sessPag.pageCount}
+                pageSize={sessPag.pageSize}
+                setPage={sessPag.setPage}
+                setPageSize={sessPag.setPageSize}
+                total={sessPag.total}
+                startIndex={sessPag.startIndex}
+                endIndex={sessPag.endIndex}
+              />
+              </>
             )}
           </div>
         )}
@@ -561,7 +578,8 @@ export default function ResidentProfilePage() {
                 <p className="text-dark/45 text-sm">Home visitation records for this resident will appear here.</p>
               </div>
             ) : (
-              visitations.map((visit) => (
+              <>
+              {visitPag.pageItems.map((visit) => (
                 <div
                   key={visit.visitationId}
                   className={`card hover:shadow-card-hover transition-all duration-200 border-l-4 ${visit.safetyConcern ? 'border-red-400' : 'border-teal'}`}
@@ -632,7 +650,18 @@ export default function ResidentProfilePage() {
                     </div>
                   )}
                 </div>
-              ))
+              ))}
+              <ListPaginationBar
+                page={visitPag.page}
+                pageCount={visitPag.pageCount}
+                pageSize={visitPag.pageSize}
+                setPage={visitPag.setPage}
+                setPageSize={visitPag.setPageSize}
+                total={visitPag.total}
+                startIndex={visitPag.startIndex}
+                endIndex={visitPag.endIndex}
+              />
+              </>
             )}
           </div>
         )}
