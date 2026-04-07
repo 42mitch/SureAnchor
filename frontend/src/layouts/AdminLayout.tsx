@@ -79,7 +79,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             }`}
           >
             <ShieldAlert size={18} strokeWidth={isActive('/admin/safety') ? 2.2 : 1.8} />
-            <span className="flex-1">Safety</span>
+            <span className="flex-1">Safety Monitor</span>
             {isActive('/admin/safety') && <ChevronRight size={14} className="text-red-300/70" />}
           </Link>
         )}
@@ -133,7 +133,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <Menu size={20} />
             </button>
             <div className="text-sm font-medium text-dark/50">
-              {isActive('/admin/safety') ? 'Safety' : navItems.find(n => isActive(n.href))?.label || 'Admin'}
+              {isActive('/admin/safety') ? 'Safety Monitor' : navItems.find(n => isActive(n.href))?.label || 'Admin'}
             </div>
           </div>
           <div className="flex items-center gap-3">
