@@ -121,7 +121,7 @@ public class DonationsController : ControllerBase
             DonationDate = DateOnly.FromDateTime(DateTime.UtcNow),
             IsRecurring  = false,
             CampaignName = dto.CampaignName,
-            ChannelSource = "Website",
+            ChannelSource = "Direct",
             CurrencyCode = "PHP",
             Amount       = dto.Amount,
             ImpactUnit   = "pesos",
