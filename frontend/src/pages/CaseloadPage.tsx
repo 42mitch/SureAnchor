@@ -1,15 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, X, ChevronRight, User } from 'lucide-react';
+import { Search, Plus, X, ChevronRight, User, Trash2 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
-import { residents } from '../data/mockData';
+import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../api';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+
+interface Resident {
+  residentId: number;
+  caseNo: string;
+  internalCode: string;
+  safehouse: string;
+  age: number;
+  category: string;
+  risk: string;
+  status: string;
+  worker: string;
+  religion: string | null;
+  dateAdmitted: string | null;
+}
 
 const riskBadge = (risk: string) => {
   const map: Record<string, string> = {
-    Low: 'badge-low',
-    Medium: 'badge-medium',
-    High: 'badge-high',
-    Critical: 'badge-critical',
+    Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high', Critical: 'badge-critical',
   };
   return <span className={map[risk] || 'badge-medium'}>{risk}</span>;
 };
@@ -17,8 +30,8 @@ const riskBadge = (risk: string) => {
 const statusBadge = (status: string) => {
   const map: Record<string, string> = {
     Active: 'bg-blue-100 text-blue-700',
-    Reintegrating: 'bg-teal/10 text-teal-dark',
-    Aftercare: 'bg-purple-100 text-purple-700',
+    Closed: 'bg-gray-100 text-gray-500',
+    Transferred: 'bg-purple-100 text-purple-700',
   };
   return (
     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${map[status] || 'bg-gray-100 text-gray-600'}`}>
@@ -28,7 +41,45 @@ const statusBadge = (status: string) => {
 };
 
 export default function CaseloadPage() {
-  const [selectedResident, setSelectedResident] = useState<typeof residents[0] | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.roles.includes('Admin') ?? false;
+
+  const [residents, setResidents] = useState<Resident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [riskFilter, setRiskFilter] = useState('');
+  const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Resident | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    apiFetch('/api/residents')
+      .then(r => r.ok ? r.json() : [])
+      .then(setResidents)
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    await apiFetch(`/api/residents/${deleteTarget.residentId}`, { method: 'DELETE' });
+    setResidents(prev => prev.filter(r => r.residentId !== deleteTarget.residentId));
+    setDeleteTarget(null);
+    setSelectedResident(null);
+    setDeleteLoading(false);
+  }
+
+  const filtered = residents.filter(r => {
+    const matchSearch = !search ||
+      r.caseNo.toLowerCase().includes(search.toLowerCase()) ||
+      r.worker.toLowerCase().includes(search.toLowerCase()) ||
+      r.safehouse.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = !statusFilter || r.status === statusFilter;
+    const matchRisk = !riskFilter || r.risk === riskFilter;
+    return matchSearch && matchStatus && matchRisk;
+  });
 
   return (
     <AdminLayout>
@@ -37,9 +88,12 @@ export default function CaseloadPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold text-navy">Caseload Inventory</h1>
-            <p className="text-dark/50 text-sm mt-1">47 active residents across 8 safe houses</p>
+            <p className="text-dark/50 text-sm mt-1">{residents.length} residents in system</p>
           </div>
-          <button className="btn-primary flex items-center gap-2 text-sm self-start sm:self-auto">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-primary flex items-center gap-2 text-sm self-start sm:self-auto"
+          >
             <Plus size={16} />
             Add Resident
           </button>
@@ -52,64 +106,81 @@ export default function CaseloadPage() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
               <input
                 type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
                 placeholder="Search by case no., worker, or safehouse..."
                 className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30"
               />
             </div>
-            {['Status', 'Safehouse', 'Risk Level'].map(filter => (
-              <select
-                key={filter}
-                className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal"
-              >
-                <option>{filter}</option>
-                {filter === 'Status' && ['Active', 'Reintegrating', 'Aftercare'].map(o => <option key={o}>{o}</option>)}
-                {filter === 'Safehouse' && ['SH-01', 'SH-02', 'SH-03', 'SH-04'].map(o => <option key={o}>{o}</option>)}
-                {filter === 'Risk Level' && ['Low', 'Medium', 'High', 'Critical'].map(o => <option key={o}>{o}</option>)}
-              </select>
-            ))}
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
+            >
+              <option value="">Status</option>
+              {['Active', 'Closed', 'Transferred'].map(o => <option key={o}>{o}</option>)}
+            </select>
+            <select
+              value={riskFilter}
+              onChange={e => setRiskFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
+            >
+              <option value="">Risk Level</option>
+              {['Low', 'Medium', 'High', 'Critical'].map(o => <option key={o}>{o}</option>)}
+            </select>
           </div>
         </div>
 
         {/* Table */}
         <div className="card overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-dark/8 bg-cream/70">
-                  {['Case No.', 'Safehouse', 'Age', 'Category', 'Risk Level', 'Status', 'Social Worker'].map(h => (
-                    <th key={h} className="text-left text-xs font-semibold text-dark/40 uppercase tracking-wide px-5 py-3.5 whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                  <th className="px-5 py-3.5" />
-                </tr>
-              </thead>
-              <tbody>
-                {residents.map((r, i) => (
-                  <tr
-                    key={r.id}
-                    onClick={() => setSelectedResident(r)}
-                    className={`border-b border-dark/5 cursor-pointer hover:bg-teal/4 transition-colors last:border-0 ${i % 2 === 0 ? '' : 'bg-cream/30'}`}
-                  >
-                    <td className="px-5 py-3.5">
-                      <span className="font-mono text-sm font-semibold text-navy">{r.caseNo}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-sm font-medium text-dark/70 bg-navy/6 px-2 py-0.5 rounded-md">{r.safehouse}</span>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-dark/70">{r.age}</td>
-                    <td className="px-5 py-3.5 text-sm text-dark/70 whitespace-nowrap">{r.category}</td>
-                    <td className="px-5 py-3.5">{riskBadge(r.risk)}</td>
-                    <td className="px-5 py-3.5">{statusBadge(r.status)}</td>
-                    <td className="px-5 py-3.5 text-sm text-dark/70 whitespace-nowrap">{r.worker}</td>
-                    <td className="px-5 py-3.5">
-                      <ChevronRight size={16} className="text-dark/25" />
-                    </td>
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <div className="w-8 h-8 rounded-full border-4 border-teal border-t-transparent animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-16 text-center text-dark/40 text-sm">No residents found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-dark/8 bg-cream/70">
+                    {['Case No.', 'Safehouse', 'Age', 'Category', 'Risk Level', 'Status', 'Social Worker', ''].map(h => (
+                      <th key={h} className="text-left text-xs font-semibold text-dark/40 uppercase tracking-wide px-5 py-3.5 whitespace-nowrap">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((r, i) => (
+                    <tr
+                      key={r.residentId}
+                      onClick={() => setSelectedResident(r)}
+                      className={`border-b border-dark/5 cursor-pointer hover:bg-teal/4 transition-colors last:border-0 ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}
+                    >
+                      <td className="px-5 py-3.5"><span className="font-mono text-sm font-semibold text-navy">{r.caseNo}</span></td>
+                      <td className="px-5 py-3.5"><span className="text-sm font-medium text-dark/70 bg-navy/6 px-2 py-0.5 rounded-md">{r.safehouse}</span></td>
+                      <td className="px-5 py-3.5 text-sm text-dark/70">{r.age}</td>
+                      <td className="px-5 py-3.5 text-sm text-dark/70 whitespace-nowrap">{r.category || '—'}</td>
+                      <td className="px-5 py-3.5">{riskBadge(r.risk)}</td>
+                      <td className="px-5 py-3.5">{statusBadge(r.status)}</td>
+                      <td className="px-5 py-3.5 text-sm text-dark/70 whitespace-nowrap">{r.worker || '—'}</td>
+                      <td className="px-5 py-3.5 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                        {isAdmin && (
+                          <button
+                            onClick={() => setDeleteTarget(r)}
+                            className="p-1.5 rounded-lg text-dark/25 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Delete resident"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                        <ChevronRight size={16} className="text-dark/25" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
@@ -118,43 +189,36 @@ export default function CaseloadPage() {
         <div className="fixed inset-0 z-40 flex justify-end">
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setSelectedResident(null)} />
           <div className="relative bg-white w-full max-w-md shadow-2xl overflow-y-auto animate-slide-in flex flex-col">
-            {/* Panel header */}
             <div className="bg-navy px-6 py-5 flex items-start justify-between flex-shrink-0">
-              <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center">
-                    <User size={18} className="text-white" />
-                  </div>
-                  <div>
-                    <p className="font-mono text-sm text-white/60">{selectedResident.caseNo}</p>
-                    <p className="text-white font-semibold">Resident {selectedResident.id}</p>
-                  </div>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center">
+                  <User size={18} className="text-white" />
+                </div>
+                <div>
+                  <p className="font-mono text-sm text-white/60">{selectedResident.caseNo}</p>
+                  <p className="text-white font-semibold">Resident {selectedResident.internalCode}</p>
                 </div>
               </div>
               <button onClick={() => setSelectedResident(null)} className="text-white/50 hover:text-white mt-1">
                 <X size={20} />
               </button>
             </div>
-
             <div className="p-6 space-y-5 flex-1">
-              {/* Badges */}
               <div className="flex gap-2 flex-wrap">
                 {riskBadge(selectedResident.risk)}
                 {statusBadge(selectedResident.status)}
                 <span className="bg-navy/8 text-navy px-2.5 py-0.5 rounded-full text-xs font-semibold">{selectedResident.safehouse}</span>
               </div>
-
-              {/* Demographics */}
               <div className="card bg-cream p-5">
-                <h3 className="font-semibold text-sm text-navy mb-3 uppercase tracking-wide">Demographics</h3>
+                <h3 className="font-semibold text-sm text-navy mb-3 uppercase tracking-wide">Details</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     ['Age', selectedResident.age],
-                    ['Category', selectedResident.category],
-                    ['Civil Status', selectedResident.demographics.civilStatus],
-                    ['Religion', selectedResident.demographics.religion],
-                    ['Education', selectedResident.demographics.educationLevel],
-                    ['Date Admitted', selectedResident.demographics.dateAdmitted],
+                    ['Category', selectedResident.category || '—'],
+                    ['Religion', selectedResident.religion || '—'],
+                    ['Date Admitted', selectedResident.dateAdmitted ?? '—'],
+                    ['Social Worker', selectedResident.worker || '—'],
+                    ['Status', selectedResident.status],
                   ].map(([label, value]) => (
                     <div key={String(label)}>
                       <p className="text-xs text-dark/40 font-medium mb-0.5">{label}</p>
@@ -163,37 +227,156 @@ export default function CaseloadPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Assigned worker */}
-              <div>
-                <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide mb-2">Assigned Social Worker</p>
-                <div className="flex items-center gap-3 bg-teal/6 rounded-xl px-4 py-3">
-                  <div className="w-8 h-8 rounded-full bg-teal flex items-center justify-center text-white text-xs font-bold">
-                    {selectedResident.worker.split(' ').map(n => n[0]).join('')}
-                  </div>
-                  <span className="text-sm font-semibold text-navy">{selectedResident.worker}</span>
-                </div>
+              <div className="flex flex-col gap-2">
+                <Link
+                  to={`/admin/resident/${selectedResident.residentId}`}
+                  className="w-full btn-primary text-sm flex items-center justify-center gap-2"
+                >
+                  View Full Case Profile
+                  <ChevronRight size={15} />
+                </Link>
+                {isAdmin && (
+                  <button
+                    onClick={() => setDeleteTarget(selectedResident)}
+                    className="w-full py-2.5 rounded-xl border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={15} />
+                    Delete Resident
+                  </button>
+                )}
               </div>
-
-              {/* Recent note */}
-              <div>
-                <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide mb-2">Most Recent Session Note</p>
-                <div className="bg-cream rounded-xl px-4 py-4 border-l-4 border-teal">
-                  <p className="text-sm text-dark/70 leading-relaxed">{selectedResident.recentNote}</p>
-                </div>
-              </div>
-
-              <Link
-                to={`/admin/resident/${selectedResident.id}`}
-                className="w-full btn-primary text-sm flex items-center justify-center gap-2"
-              >
-                View Full Case Profile
-                <ChevronRight size={15} />
-              </Link>
             </div>
           </div>
         </div>
       )}
+
+      {/* Add modal (placeholder — full form can be expanded) */}
+      {showAddModal && (
+        <AddResidentModal
+          onClose={() => setShowAddModal(false)}
+          onSaved={(r) => { setResidents(prev => [...prev, r]); setShowAddModal(false); }}
+        />
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          title="Delete Resident"
+          description={`Are you sure you want to permanently delete resident ${deleteTarget.caseNo}? All associated records will also be removed.`}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+          loading={deleteLoading}
+        />
+      )}
     </AdminLayout>
+  );
+}
+
+// ── Add Resident Modal ─────────────────────────────────────────────────────────
+
+function AddResidentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (r: Resident) => void }) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    caseControlNo: '', internalCode: '', safehouseId: '', caseStatus: 'Active',
+    caseCategory: '', currentRiskLevel: 'Medium', assignedSocialWorker: '',
+    religion: '', dateOfBirth: '', dateOfAdmission: '',
+  });
+
+  function set(key: string, value: string) {
+    setForm(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const res = await apiFetch('/api/residents', {
+      method: 'POST',
+      body: JSON.stringify({
+        caseControlNo: form.caseControlNo,
+        internalCode: form.internalCode,
+        safehouseId: parseInt(form.safehouseId),
+        caseStatus: form.caseStatus,
+        caseCategory: form.caseCategory || null,
+        currentRiskLevel: form.currentRiskLevel,
+        assignedSocialWorker: form.assignedSocialWorker || null,
+        religion: form.religion || null,
+        dateOfBirth: form.dateOfBirth || null,
+        dateOfAdmission: form.dateOfAdmission || null,
+      }),
+    });
+    if (res.ok) {
+      const { residentId } = await res.json();
+      const newResident: Resident = {
+        residentId, caseNo: form.caseControlNo, internalCode: form.internalCode,
+        safehouse: form.safehouseId, age: 0, category: form.caseCategory,
+        risk: form.currentRiskLevel, status: form.caseStatus,
+        worker: form.assignedSocialWorker, religion: form.religion || null,
+        dateAdmitted: form.dateOfAdmission || null,
+      };
+      onSaved(newResident);
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
+        <div className="sticky top-0 bg-white rounded-t-3xl px-6 py-5 border-b border-dark/8 flex items-center justify-between z-10">
+          <h2 className="font-display text-xl font-bold text-navy">Add Resident</h2>
+          <button onClick={onClose} className="text-dark/35 hover:text-dark hover:bg-dark/6 rounded-lg p-1.5 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <form className="p-6 space-y-4" onSubmit={handleSubmit}>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {[
+              { label: 'Case Control No.', key: 'caseControlNo', placeholder: 'SA-2024-001' },
+              { label: 'Internal Code', key: 'internalCode', placeholder: 'C0001' },
+              { label: 'Safehouse ID', key: 'safehouseId', placeholder: '1' },
+              { label: 'Social Worker', key: 'assignedSocialWorker', placeholder: 'Name' },
+              { label: 'Religion', key: 'religion', placeholder: 'Optional' },
+              { label: 'Date of Birth', key: 'dateOfBirth', type: 'date' },
+              { label: 'Date of Admission', key: 'dateOfAdmission', type: 'date' },
+            ].map(({ label, key, placeholder, type }) => (
+              <div key={key}>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">{label}</label>
+                <input type={type ?? 'text'} placeholder={placeholder}
+                  value={(form as any)[key]} onChange={e => set(key, e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+              </div>
+            ))}
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Status</label>
+              <select value={form.caseStatus} onChange={e => set('caseStatus', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {['Active', 'Closed', 'Transferred'].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Risk Level</label>
+              <select value={form.currentRiskLevel} onChange={e => set('currentRiskLevel', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {['Low', 'Medium', 'High', 'Critical'].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Case Category</label>
+              <select value={form.caseCategory} onChange={e => set('caseCategory', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                <option value="">Select...</option>
+                {['Abandoned', 'Foundling', 'Surrendered', 'Neglected'].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary text-sm disabled:opacity-60">
+              {saving ? 'Saving...' : 'Add Resident'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

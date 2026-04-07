@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import RequireAuth from './components/RequireAuth';
 import LandingPage from './pages/LandingPage';
 import ImpactPage from './pages/ImpactPage';
 import LoginPage from './pages/LoginPage';
+import DonorPortalPage from './pages/DonorPortalPage';
 import AdminDashboard from './pages/AdminDashboard';
 import CaseloadPage from './pages/CaseloadPage';
 import ProcessRecordingPage from './pages/ProcessRecordingPage';
@@ -13,21 +16,58 @@ import ResidentProfilePage from './pages/ResidentProfilePage';
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public pages */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/impact" element={<ImpactPage />} />
-        <Route path="/login" element={<LoginPage />} />
+      <AuthProvider>
+        <Routes>
+          {/* Public — no auth required */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/impact" element={<ImpactPage />} />
+          <Route path="/login" element={<LoginPage />} />
 
-        {/* Admin pages */}
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/caseload" element={<CaseloadPage />} />
-        <Route path="/admin/process-recording" element={<ProcessRecordingPage />} />
-        <Route path="/admin/donors" element={<DonorsPage />} />
-        <Route path="/admin/reports" element={<ReportsPage />} />
-        <Route path="/admin/visitations" element={<VisitationsPage />} />
-        <Route path="/admin/resident/:id" element={<ResidentProfilePage />} />
-      </Routes>
+          {/* Donor portal — Donor role only */}
+          <Route path="/donor" element={
+            <RequireAuth roles={['Donor']}>
+              <DonorPortalPage />
+            </RequireAuth>
+          } />
+
+          {/* Admin / Staff pages */}
+          <Route path="/admin" element={
+            <RequireAuth roles={['Admin', 'Staff']}>
+              <AdminDashboard />
+            </RequireAuth>
+          } />
+          <Route path="/admin/caseload" element={
+            <RequireAuth roles={['Admin', 'Staff']}>
+              <CaseloadPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/process-recording" element={
+            <RequireAuth roles={['Admin', 'Staff']}>
+              <ProcessRecordingPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/donors" element={
+            <RequireAuth roles={['Admin', 'Staff']}>
+              <DonorsPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/reports" element={
+            <RequireAuth roles={['Admin', 'Staff']}>
+              <ReportsPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/visitations" element={
+            <RequireAuth roles={['Admin', 'Staff']}>
+              <VisitationsPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/resident/:id" element={
+            <RequireAuth roles={['Admin', 'Staff']}>
+              <ResidentProfilePage />
+            </RequireAuth>
+          } />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

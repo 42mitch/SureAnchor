@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, Home, HeartHandshake,
   BarChart2, Settings, LogOut, Menu, ChevronRight
 } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
+import { useAuth } from '../context/AuthContext';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -22,6 +23,20 @@ const navItems = [
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  async function handleLogout() {
+    await logout();
+    navigate('/login', { replace: true });
+  }
+
+  const displayName = user?.displayName ?? user?.email ?? 'User';
+  const initials = displayName.slice(0, 2).toUpperCase();
+  const roleLabel = user?.roles.includes('Admin') ? 'Admin'
+    : user?.roles.includes('Staff') ? 'Staff'
+    : user?.roles.includes('Donor') ? 'Donor'
+    : 'User';
 
   const isActive = (href: string) => {
     if (href === '/admin') return location.pathname === '/admin';
@@ -58,13 +73,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <Settings size={18} strokeWidth={1.8} />
           Settings
         </button>
-        <Link
-          to="/login"
+        <button
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-red-300 hover:bg-red-500/10 transition-all"
         >
           <LogOut size={18} strokeWidth={1.8} />
           Log Out
-        </Link>
+        </button>
       </div>
     </div>
   );
@@ -106,10 +121,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
           <div className="flex items-center gap-3">
             <div className="bg-teal/10 text-teal text-xs font-semibold px-3 py-1.5 rounded-full border border-teal/20">
-              Logged in as Admin
+              {roleLabel}
             </div>
             <div className="w-8 h-8 rounded-full bg-navy flex items-center justify-center text-white text-xs font-bold">
-              A
+              {initials}
             </div>
           </div>
         </header>
