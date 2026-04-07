@@ -88,6 +88,18 @@ public class ProcessRecordingsController : ControllerBase
         return NoContent();
     }
 
+    // ── PATCH /api/process-recordings/{id}/resolve ────────────────────────────
+    [HttpPatch("{id:int}/resolve")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Resolve(int id)
+    {
+        var rec = await _db.ProcessRecordings.FindAsync(id);
+        if (rec == null) return NotFound();
+        rec.ConcernsFlagged = false;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     // ── DELETE /api/process-recordings/{id} ───────────────────────────────────
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]
