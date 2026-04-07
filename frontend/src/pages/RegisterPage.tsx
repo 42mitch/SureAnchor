@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, User, ArrowRight } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
-import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const [displayName, setDisplayName] = useState('');
