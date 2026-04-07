@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "dgSpecHash": "28XGumitU+Y=",
+  "success": false,
+  "projectFilePath": "/Users/michaeleifert/Documents/school_work/IntexWinter2026/SureAnchor/backend/backend.csproj",
+  "expectedPackageFiles": [],
+  "logs": [
+    {
+      "code": "NU1301",
+      "level": "Error",
+      "message": "Unable to load the service index for source https://api.nuget.org/v3/index.json.\n  Permission denied (127.0.0.1:60006)\n  Permission denied",
+      "projectPath": "/Users/michaeleifert/Documents/school_work/IntexWinter2026/SureAnchor/backend/backend.csproj",
+      "filePath": "/Users/michaeleifert/Documents/school_work/IntexWinter2026/SureAnchor/backend/backend.csproj",
+      "targetGraphs": []
+    }
+  ]
+}
