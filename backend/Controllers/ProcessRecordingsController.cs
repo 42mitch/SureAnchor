@@ -67,6 +67,7 @@ public class ProcessRecordingsController : ControllerBase
 
     // ── PUT /api/process-recordings/{id} ──────────────────────────────────────
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] ProcessRecordingWriteDto dto)
     {
         var rec = await _db.ProcessRecordings.FindAsync(id);

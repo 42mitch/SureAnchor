@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, X, FileText, ChevronRight, Search, Trash2 } from 'lucide-react';
+import { Plus, X, FileText, ChevronRight, Search, Trash2, Pencil } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
@@ -39,9 +39,9 @@ const typeBadge = (type: string) => (
 
 // ── Session Detail Modal ────────────────────────────────────────────────────────
 
-function SessionDetailModal({ note, onClose, onDelete, isAdmin }: {
+function SessionDetailModal({ note, onClose, onDelete, onEdit, isAdmin }: {
   note: SessionNote; onClose: () => void;
-  onDelete: () => void; isAdmin: boolean;
+  onDelete: () => void; onEdit: () => void; isAdmin: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -93,12 +93,17 @@ function SessionDetailModal({ note, onClose, onDelete, isAdmin }: {
               </div>
             </div>
           )}
-          <div className="flex gap-3 pt-2">
-            <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-dark/12 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">Close</button>
+          <div className="flex flex-wrap gap-3 pt-2">
+            <button onClick={onClose} className="flex-1 min-w-[120px] py-3 rounded-xl border border-dark/12 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">Close</button>
             {isAdmin && (
-              <button onClick={onDelete} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-100 transition-colors">
-                <Trash2 size={15} /> Delete
-              </button>
+              <>
+                <button onClick={onEdit} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-navy/8 border border-navy/15 text-navy text-sm font-semibold hover:bg-navy/12 transition-colors">
+                  <Pencil size={15} /> Edit
+                </button>
+                <button onClick={onDelete} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-100 transition-colors">
+                  <Trash2 size={15} /> Delete
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -226,6 +231,146 @@ function NewSessionModal({ residents, onClose, onSaved }: {
   );
 }
 
+// ── Edit Session Note Modal (Admin) ─────────────────────────────────────────────
+
+function EditSessionModal({ note, residents, onClose, onSaved }: {
+  note: SessionNote;
+  residents: Resident[];
+  onClose: () => void;
+  onSaved: (n: SessionNote) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    residentId: String(note.residentId),
+    sessionDate: note.sessionDate,
+    socialWorker: note.socialWorker,
+    sessionType: note.sessionType,
+    emotionalStateObserved: note.emotionalState,
+    sessionNarrative: note.narrative,
+    interventionsApplied: note.interventions,
+    followUpActions: note.followUp,
+    progressNoted: note.progressNoted,
+    concernsFlagged: note.concernsFlagged,
+  });
+
+  function set(key: string, value: string | boolean) {
+    setForm(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const res = await apiFetch(`/api/process-recordings/${note.recordingId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...form,
+        residentId: parseInt(form.residentId, 10),
+      }),
+    });
+    if (res.ok) {
+      const resident = residents.find(r => r.residentId === parseInt(form.residentId, 10));
+      onSaved({
+        ...note,
+        residentId: parseInt(form.residentId, 10),
+        residentCode: resident?.internalCode ?? note.residentCode,
+        sessionDate: form.sessionDate,
+        socialWorker: form.socialWorker,
+        sessionType: form.sessionType,
+        emotionalState: form.emotionalStateObserved,
+        narrative: form.sessionNarrative,
+        interventions: form.interventionsApplied,
+        followUp: form.followUpActions,
+        progressNoted: form.progressNoted,
+        concernsFlagged: form.concernsFlagged,
+      });
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in">
+        <div className="sticky top-0 bg-white rounded-t-3xl px-6 py-5 border-b border-dark/8 flex items-center justify-between z-10">
+          <div>
+            <h2 className="font-display text-xl font-bold text-navy">Edit Session Note</h2>
+            <p className="text-xs text-dark/40 mt-0.5">#{note.recordingId} · changes are saved to the record</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-dark/35 hover:text-dark hover:bg-dark/6 rounded-lg p-1.5 transition-colors"><X size={18} /></button>
+        </div>
+        <form className="p-6 space-y-5" onSubmit={handleSubmit}>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Resident</label>
+              <select required value={form.residentId} onChange={e => set('residentId', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {residents.map(r => (
+                  <option key={r.residentId} value={r.residentId}>
+                    Resident {r.internalCode} ({r.safehouse})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Session Date</label>
+              <input type="date" value={form.sessionDate} onChange={e => set('sessionDate', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Social Worker</label>
+              <input type="text" placeholder="Full name" value={form.socialWorker} onChange={e => set('socialWorker', e.target.value)} required
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Session Type</label>
+              <select value={form.sessionType} onChange={e => set('sessionType', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                <option>Individual</option><option>Group</option>
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Emotional State</label>
+              <select value={form.emotionalStateObserved} onChange={e => set('emotionalStateObserved', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {['Calm', 'Hopeful', 'Anxious', 'Distressed', 'Reflective', 'Withdrawn', 'Happy', 'Angry', 'Sad'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Session Narrative</label>
+            <textarea rows={5} placeholder="Describe the session in detail..." value={form.sessionNarrative} onChange={e => set('sessionNarrative', e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Interventions Applied</label>
+            <input type="text" placeholder="e.g. CBT grounding, art therapy..." value={form.interventionsApplied} onChange={e => set('interventionsApplied', e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Follow-up Actions</label>
+            <input type="text" placeholder="e.g. Coordinate with legal team..." value={form.followUpActions} onChange={e => set('followUpActions', e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+          </div>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm text-dark/60 cursor-pointer">
+              <input type="checkbox" checked={form.progressNoted} onChange={e => set('progressNoted', e.target.checked)} className="w-4 h-4 accent-teal" />
+              Progress noted
+            </label>
+            <label className="flex items-center gap-2 text-sm text-dark/60 cursor-pointer">
+              <input type="checkbox" checked={form.concernsFlagged} onChange={e => set('concernsFlagged', e.target.checked)} className="w-4 h-4 accent-red-500" />
+              Concerns flagged
+            </label>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary text-sm disabled:opacity-60">{saving ? 'Saving...' : 'Save Changes'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ───────────────────────────────────────────────────────────────────
 
 export default function ProcessRecordingPage() {
@@ -238,6 +383,7 @@ export default function ProcessRecordingPage() {
   const [search, setSearch] = useState('');
   const [selectedNote, setSelectedNote] = useState<SessionNote | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [editingNote, setEditingNote] = useState<SessionNote | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SessionNote | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -326,9 +472,14 @@ export default function ProcessRecordingPage() {
                       <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
                           {isAdmin && (
-                            <button onClick={() => setDeleteTarget(note)} className="p-1.5 rounded-lg text-dark/25 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
-                              <Trash2 size={14} />
-                            </button>
+                            <>
+                              <button onClick={() => setEditingNote(note)} className="p-1.5 rounded-lg text-dark/25 hover:text-navy hover:bg-navy/8 transition-colors" title="Edit">
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => setDeleteTarget(note)} className="p-1.5 rounded-lg text-dark/25 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+                                <Trash2 size={14} />
+                              </button>
+                            </>
                           )}
                           <ChevronRight size={16} className="text-dark/20 group-hover:text-teal group-hover:translate-x-0.5 transition-all" />
                         </div>
@@ -347,8 +498,28 @@ export default function ProcessRecordingPage() {
       </div>
 
       {selectedNote && (
-        <SessionDetailModal note={selectedNote} onClose={() => setSelectedNote(null)}
-          onDelete={() => { setDeleteTarget(selectedNote); setSelectedNote(null); }} isAdmin={isAdmin} />
+        <SessionDetailModal
+          note={selectedNote}
+          onClose={() => setSelectedNote(null)}
+          onDelete={() => { setDeleteTarget(selectedNote); setSelectedNote(null); }}
+          onEdit={() => {
+            const n = selectedNote;
+            setSelectedNote(null);
+            setEditingNote(n);
+          }}
+          isAdmin={isAdmin}
+        />
+      )}
+      {editingNote && (
+        <EditSessionModal
+          note={editingNote}
+          residents={residents}
+          onClose={() => setEditingNote(null)}
+          onSaved={(n) => {
+            setNotes(prev => prev.map(x => (x.recordingId === n.recordingId ? n : x)));
+            setEditingNote(null);
+          }}
+        />
       )}
       {showNewModal && (
         <NewSessionModal residents={residents} onClose={() => setShowNewModal(false)}
