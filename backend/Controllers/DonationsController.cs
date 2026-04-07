@@ -86,6 +86,52 @@ public class DonationsController : ControllerBase
         return Ok(allocations);
     }
 
+    // ── POST /api/donations/give ──────────────────────────────────────────────
+    // Donor self-service: submit their own donation (creates Supporter if needed)
+    [HttpPost("give")]
+    [Authorize(Roles = "Donor")]
+    public async Task<IActionResult> Give([FromBody] DonorGiveDto dto)
+    {
+        var appUser = await _userManager.GetUserAsync(User);
+        if (appUser == null) return Unauthorized();
+
+        // Auto-create a Supporter record if the donor doesn't have one yet
+        if (appUser.SupporterId == null)
+        {
+            var supporter = new Supporter
+            {
+                SupporterType = "MonetaryDonor",
+                DisplayName   = appUser.DisplayName ?? appUser.Email!,
+                Email         = appUser.Email,
+                Status        = "Active",
+                CreatedAt     = DateTime.UtcNow,
+                FirstDonationDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                AcquisitionChannel = "Website",
+            };
+            _db.Supporters.Add(supporter);
+            await _db.SaveChangesAsync();
+            appUser.SupporterId = supporter.SupporterId;
+            await _userManager.UpdateAsync(appUser);
+        }
+
+        var donation = new Donation
+        {
+            SupporterId  = appUser.SupporterId!.Value,
+            DonationType = "Monetary",
+            DonationDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            IsRecurring  = false,
+            CampaignName = dto.CampaignName,
+            ChannelSource = "Website",
+            CurrencyCode = "PHP",
+            Amount       = dto.Amount,
+            ImpactUnit   = "pesos",
+            Notes        = dto.Notes,
+        };
+        _db.Donations.Add(donation);
+        await _db.SaveChangesAsync();
+        return Ok(new { donation.DonationId, message = "Thank you for your donation!" });
+    }
+
     // ── POST /api/donations ───────────────────────────────────────────────────
     [HttpPost]
     [Authorize(Roles = "Admin,Staff")]
@@ -164,6 +210,8 @@ public record DonationDto(
     string? ImpactUnit,
     string? Notes
 );
+
+public record DonorGiveDto(decimal Amount, string? CampaignName, string? Notes);
 
 public record DonationWriteDto(
     int SupporterId,

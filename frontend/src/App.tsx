@@ -4,6 +4,7 @@ import RequireAuth from './components/RequireAuth';
 import LandingPage from './pages/LandingPage';
 import ImpactPage from './pages/ImpactPage';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import DonorPortalPage from './pages/DonorPortalPage';
 import AdminDashboard from './pages/AdminDashboard';
 import CaseloadPage from './pages/CaseloadPage';
@@ -22,6 +23,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/impact" element={<ImpactPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
           {/* Donor portal — Donor role only */}
           <Route path="/donor" element={
