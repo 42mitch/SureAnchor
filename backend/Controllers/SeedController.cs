@@ -1,3 +1,4 @@
+using Backend.Data;
 using Backend.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -5,19 +6,21 @@ using Microsoft.AspNetCore.Mvc;
 namespace Backend.Controllers;
 
 /// <summary>
-/// One-time database seeder for roles and initial users.
-/// This endpoint is only usable when NO users exist yet (safe to leave deployed).
-/// Call POST /api/seed once after running migrations, then you're done.
+/// One-time seeder for roles, users, and all domain data.
+/// Safe to leave deployed — checks prevent double-seeding.
+/// Call POST /api/seed once after running migrations.
 /// </summary>
 [ApiController]
 [Route("api/seed")]
 public class SeedController : ControllerBase
 {
+    private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
 
-    public SeedController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
+    public SeedController(ApplicationDbContext db, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
     {
+        _db = db;
         _userManager = userManager;
         _roleManager = roleManager;
     }
@@ -25,59 +28,196 @@ public class SeedController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Seed()
     {
-        // Safety check — only runs if no users exist yet
-        if (_userManager.Users.Any())
-            return Conflict(new { message = "Database already has users. Seed aborted." });
-
+        var seeded = new List<string>();
         var errors = new List<string>();
 
-        // ── 1. Create roles ────────────────────────────────────────────────────
+        // ── 1. Roles ───────────────────────────────────────────────────────────
         foreach (var role in new[] { "Admin", "Staff", "Donor" })
         {
             if (!await _roleManager.RoleExistsAsync(role))
             {
-                var result = await _roleManager.CreateAsync(new IdentityRole(role));
-                if (!result.Succeeded)
-                    errors.AddRange(result.Errors.Select(e => $"Role {role}: {e.Description}"));
+                await _roleManager.CreateAsync(new IdentityRole(role));
+                seeded.Add($"Role: {role}");
             }
         }
 
-        // ── 2. Seed users ──────────────────────────────────────────────────────
-        var users = new[]
+        // ── 2. Users ───────────────────────────────────────────────────────────
+        if (!_userManager.Users.Any())
         {
-            new { Email = "admin@sureanchor.org",  Password = "SureAnchorAdmin2025", DisplayName = "System Admin",  Role = "Admin"  },
-            new { Email = "staff@sureanchor.org",  Password = "SureAnchorStaff2025", DisplayName = "Staff Member",  Role = "Staff"  },
-            new { Email = "donor@sureanchor.org",  Password = "SureAnchorDonor2025", DisplayName = "Sample Donor",  Role = "Donor"  },
-        };
-
-        foreach (var u in users)
-        {
-            var appUser = new ApplicationUser
+            var users = new[]
             {
-                UserName    = u.Email,
-                Email       = u.Email,
-                DisplayName = u.DisplayName,
-                EmailConfirmed = true,
+                new { Email = "admin@sureanchor.org",  Password = "SureAnchorAdmin2025", DisplayName = "System Admin",       Role = "Admin"  },
+                new { Email = "staff@sureanchor.org",  Password = "SureAnchorStaff2025", DisplayName = "Maria Santos",       Role = "Staff"  },
+                new { Email = "donor@sureanchor.org",  Password = "SureAnchorDonor2025", DisplayName = "Maria Reyes Santos", Role = "Donor"  },
             };
-
-            var createResult = await _userManager.CreateAsync(appUser, u.Password);
-            if (createResult.Succeeded)
+            foreach (var u in users)
             {
-                await _userManager.AddToRoleAsync(appUser, u.Role);
-            }
-            else
-            {
-                errors.AddRange(createResult.Errors.Select(e => $"User {u.Email}: {e.Description}"));
+                var appUser = new ApplicationUser { UserName = u.Email, Email = u.Email, DisplayName = u.DisplayName, EmailConfirmed = true };
+                var result = await _userManager.CreateAsync(appUser, u.Password);
+                if (result.Succeeded) { await _userManager.AddToRoleAsync(appUser, u.Role); seeded.Add($"User: {u.Email}"); }
+                else errors.AddRange(result.Errors.Select(e => $"User {u.Email}: {e.Description}"));
             }
         }
 
-        if (errors.Any())
-            return BadRequest(new { message = "Seed completed with errors.", errors });
+        // ── 3. Domain data (skip if already seeded) ────────────────────────────
+        if (_db.Safehouses.Any())
+            return Ok(new { message = "Domain data already seeded.", seeded, errors });
 
-        return Ok(new
+        // ── Safehouses ─────────────────────────────────────────────────────────
+        var sh1 = new Safehouse { SafehouseCode = "SH-MNL", Name = "Hope Haven Manila",   Region = "NCR",               City = "Quezon City",  Province = "Metro Manila",  Country = "Philippines", OpenDate = new DateOnly(2018, 3, 15),  Status = "Active", CapacityGirls = 20, CapacityStaff = 8, CurrentOccupancy = 14 };
+        var sh2 = new Safehouse { SafehouseCode = "SH-CEB", Name = "Sanctuary Cebu",      Region = "Central Visayas",   City = "Cebu City",    Province = "Cebu",          Country = "Philippines", OpenDate = new DateOnly(2019, 7,  1),  Status = "Active", CapacityGirls = 15, CapacityStaff = 6, CurrentOccupancy = 11 };
+        var sh3 = new Safehouse { SafehouseCode = "SH-DAV", Name = "Safe House Davao",    Region = "Davao Region",      City = "Davao City",   Province = "Davao del Sur", Country = "Philippines", OpenDate = new DateOnly(2020, 11, 20), Status = "Active", CapacityGirls = 12, CapacityStaff = 5, CurrentOccupancy = 8  };
+        _db.Safehouses.AddRange(sh1, sh2, sh3);
+        await _db.SaveChangesAsync();
+        seeded.Add("3 Safehouses");
+
+        // ── Partners ───────────────────────────────────────────────────────────
+        var p1 = new Partner { PartnerName = "Dept. of Social Welfare and Development", PartnerType = "Organization", RoleType = "SafehouseOps", ContactName = "Sec. Rex Gatchalian",  Email = "contact@dswd.gov.ph",        Region = "NCR", Status = "Active", StartDate = new DateOnly(2018, 1, 1)  };
+        var p2 = new Partner { PartnerName = "Philippine General Hospital",             PartnerType = "Organization", RoleType = "Education",    ContactName = "Dr. Gerardo Legaspi",  Email = "info@pgh.gov.ph",            Region = "NCR", Status = "Active", StartDate = new DateOnly(2019, 3, 10) };
+        var p3 = new Partner { PartnerName = "Rotary Club of Makati",                  PartnerType = "Organization", RoleType = "Logistics",    ContactName = "Robert Tan",           Email = "rotarymakati@rotary.org",    Region = "NCR", Status = "Active", StartDate = new DateOnly(2020, 6, 1)  };
+        var p4 = new Partner { PartnerName = "Caritas Philippines",                    PartnerType = "Organization", RoleType = "Education",    ContactName = "Fr. Anton Pascual",    Email = "info@caritasphil.org",       Region = "NCR", Status = "Active", StartDate = new DateOnly(2021, 1, 15) };
+        _db.Partners.AddRange(p1, p2, p3, p4);
+        await _db.SaveChangesAsync();
+        seeded.Add("4 Partners");
+
+        _db.PartnerAssignments.AddRange(
+            new PartnerAssignment { PartnerId = p1.PartnerId, SafehouseId = sh1.SafehouseId, ProgramArea = "Operations", AssignmentStart = new DateOnly(2018, 3, 15), IsPrimary = true,  Status = "Active", ResponsibilityNotes = "Primary government liaison for Manila operations" },
+            new PartnerAssignment { PartnerId = p2.PartnerId, SafehouseId = sh1.SafehouseId, ProgramArea = "Wellbeing",  AssignmentStart = new DateOnly(2019, 4, 1),  IsPrimary = false, Status = "Active", ResponsibilityNotes = "Medical and psychological support services" },
+            new PartnerAssignment { PartnerId = p3.PartnerId, SafehouseId = sh2.SafehouseId, ProgramArea = "Operations", AssignmentStart = new DateOnly(2020, 7, 1),  IsPrimary = true,  Status = "Active", ResponsibilityNotes = "Logistics and supply chain support for Cebu" },
+            new PartnerAssignment { PartnerId = p4.PartnerId, SafehouseId = sh3.SafehouseId, ProgramArea = "Education",  AssignmentStart = new DateOnly(2021, 1, 15), IsPrimary = true,  Status = "Active", ResponsibilityNotes = "Educational program delivery and tutoring" }
+        );
+        await _db.SaveChangesAsync();
+        seeded.Add("4 Partner Assignments");
+
+        // ── Supporters ─────────────────────────────────────────────────────────
+        var s1 = new Supporter { SupporterType = "MonetaryDonor",    DisplayName = "Maria Reyes Santos",      FirstName = "Maria",  LastName = "Santos",   RelationshipType = "Local",               Region = "NCR",             Country = "Philippines", Email = "donor@sureanchor.org",    Status = "Active", AcquisitionChannel = "Website",         FirstDonationDate = new DateOnly(2022, 1, 15), CreatedAt = DateTime.UtcNow };
+        var s2 = new Supporter { SupporterType = "MonetaryDonor",    DisplayName = "ABC Charitable Foundation", OrganizationName = "ABC Charitable Foundation",                                 RelationshipType = "PartnerOrganization",                       Country = "Philippines", Email = "foundation@abc.com.ph",   Status = "Active", AcquisitionChannel = "Event",           FirstDonationDate = new DateOnly(2021, 6, 10), CreatedAt = DateTime.UtcNow };
+        var s3 = new Supporter { SupporterType = "MonetaryDonor",    DisplayName = "John Michael Rivera",     FirstName = "John",   LastName = "Rivera",   RelationshipType = "International",                                   Country = "United States", Email = "john.rivera@email.com",   Status = "Active", AcquisitionChannel = "SocialMedia",     FirstDonationDate = new DateOnly(2022, 8, 20), CreatedAt = DateTime.UtcNow };
+        var s4 = new Supporter { SupporterType = "InKindDonor",      DisplayName = "Reyes Family",            FirstName = "Carmen", LastName = "Reyes",    RelationshipType = "Local",               Region = "Central Visayas", Country = "Philippines", Email = "carmen.reyes@gmail.com",  Status = "Active", AcquisitionChannel = "Church",          FirstDonationDate = new DateOnly(2023, 2, 5),  CreatedAt = DateTime.UtcNow };
+        var s5 = new Supporter { SupporterType = "MonetaryDonor",    DisplayName = "Global Aid International", OrganizationName = "Global Aid International",                                  RelationshipType = "International",                              Country = "Canada",       Email = "grants@globalaid.org",     Status = "Active", AcquisitionChannel = "PartnerReferral", FirstDonationDate = new DateOnly(2021, 11, 1), CreatedAt = DateTime.UtcNow };
+        _db.Supporters.AddRange(s1, s2, s3, s4, s5);
+        await _db.SaveChangesAsync();
+        seeded.Add("5 Supporters");
+
+        // Link donor user to s1
+        var donorUser = await _userManager.FindByEmailAsync("donor@sureanchor.org");
+        if (donorUser != null) { donorUser.SupporterId = s1.SupporterId; await _userManager.UpdateAsync(donorUser); }
+
+        // ── Residents ──────────────────────────────────────────────────────────
+        var residents = new List<Resident>
         {
-            message = "Seed successful! Created 3 roles and 3 users.",
-            users = users.Select(u => new { u.Email, u.Password, u.Role })
-        });
+            new Resident { CaseControlNo = "CC-2022-001", InternalCode = "R-MNL-001", SafehouseId = sh1.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2010, 5, 14),  Religion = "Catholic",  CaseCategory = "Neglected",   SubCatAtRisk = true,         CurrentRiskLevel = "High",     InitialRiskLevel = "Critical", AssignedSocialWorker = "Maria Santos", DateOfAdmission = new DateOnly(2022, 3,  7),  ReferralSource = "Government Agency", ReintegrationType = "Family Reunification", ReintegrationStatus = "In Progress",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2022-002", InternalCode = "R-MNL-002", SafehouseId = sh1.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2008, 11, 22), Religion = "Catholic",  CaseCategory = "Abandoned",   SubCatPhysicalAbuse = true,  CurrentRiskLevel = "Medium",   InitialRiskLevel = "High",     AssignedSocialWorker = "Ana Reyes",    DateOfAdmission = new DateOnly(2022, 6, 15),  ReferralSource = "Police",            ReintegrationType = "Foster Care",          ReintegrationStatus = "Not Started",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2022-003", InternalCode = "R-MNL-003", SafehouseId = sh1.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2012, 2,  8),  Religion = "Christian", CaseCategory = "Surrendered", SubCatTrafficked = true,     CurrentRiskLevel = "Critical", InitialRiskLevel = "Critical", AssignedSocialWorker = "Maria Santos", DateOfAdmission = new DateOnly(2022, 9, 30),  ReferralSource = "NGO",               ReintegrationType = "None",                 ReintegrationStatus = "Not Started",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2022-004", InternalCode = "R-MNL-004", SafehouseId = sh1.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2009, 7, 17),  Religion = "Catholic",  CaseCategory = "Neglected",   FamilySoloParent = true,     CurrentRiskLevel = "Low",      InitialRiskLevel = "Medium",   AssignedSocialWorker = "Ana Reyes",    DateOfAdmission = new DateOnly(2023, 1, 12),  ReferralSource = "Community",         ReintegrationType = "Family Reunification", ReintegrationStatus = "In Progress",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2022-005", InternalCode = "R-CEB-001", SafehouseId = sh2.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2011, 9,  3),  Religion = "Catholic",  CaseCategory = "Abandoned",   SubCatSexualAbuse = true,    CurrentRiskLevel = "High",     InitialRiskLevel = "High",     AssignedSocialWorker = "Jose Cruz",    DateOfAdmission = new DateOnly(2022, 4, 20),  ReferralSource = "Court Order",       ReintegrationType = "Foster Care",          ReintegrationStatus = "Not Started",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2023-001", InternalCode = "R-CEB-002", SafehouseId = sh2.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2013, 6, 28),  Religion = "Catholic",  CaseCategory = "Foundling",                                CurrentRiskLevel = "Medium",   InitialRiskLevel = "Medium",   AssignedSocialWorker = "Jose Cruz",    DateOfAdmission = new DateOnly(2023, 3,  5),  ReferralSource = "Government Agency", ReintegrationType = "Adoption (Domestic)",  ReintegrationStatus = "In Progress",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2023-002", InternalCode = "R-CEB-003", SafehouseId = sh2.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2010, 12, 11), Religion = "Christian", CaseCategory = "Neglected",   SubCatChildLabor = true, FamilyIs4Ps = true, CurrentRiskLevel = "Medium", InitialRiskLevel = "High",  AssignedSocialWorker = "Jose Cruz",    DateOfAdmission = new DateOnly(2023, 5, 18),  ReferralSource = "NGO",               ReintegrationType = "Family Reunification", ReintegrationStatus = "Not Started",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2023-003", InternalCode = "R-CEB-004", SafehouseId = sh2.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2007, 4,  5),  Religion = "Catholic",  CaseCategory = "Surrendered", SubCatOsaec = true,          CurrentRiskLevel = "High",     InitialRiskLevel = "Critical", AssignedSocialWorker = "Maria Santos", DateOfAdmission = new DateOnly(2023, 7, 22),  ReferralSource = "Police",            ReintegrationType = "None",                 ReintegrationStatus = "Not Started",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2023-004", InternalCode = "R-DAV-001", SafehouseId = sh3.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2012, 8, 16),  Religion = "Catholic",  CaseCategory = "Neglected",   FamilyInformalSettler = true, CurrentRiskLevel = "Medium",  InitialRiskLevel = "Medium",   AssignedSocialWorker = "Ana Reyes",    DateOfAdmission = new DateOnly(2023, 2, 14),  ReferralSource = "Community",         ReintegrationType = "Family Reunification", ReintegrationStatus = "In Progress",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2023-005", InternalCode = "R-DAV-002", SafehouseId = sh3.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2009, 3, 27),  Religion = "Muslim",    CaseCategory = "Abandoned",   SubCatPhysicalAbuse = true,  CurrentRiskLevel = "High",     InitialRiskLevel = "High",     AssignedSocialWorker = "Ana Reyes",    DateOfAdmission = new DateOnly(2023, 6,  8),  ReferralSource = "Government Agency", ReintegrationType = "Foster Care",          ReintegrationStatus = "Not Started",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2023-006", InternalCode = "R-DAV-003", SafehouseId = sh3.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2014, 1, 19),  Religion = "Catholic",  CaseCategory = "Foundling",                                CurrentRiskLevel = "Low",      InitialRiskLevel = "Medium",   AssignedSocialWorker = "Jose Cruz",    DateOfAdmission = new DateOnly(2023, 9,  3),  ReferralSource = "NGO",               ReintegrationType = "Adoption (Domestic)",  ReintegrationStatus = "In Progress",  CreatedAt = DateTime.UtcNow },
+            new Resident { CaseControlNo = "CC-2024-001", InternalCode = "R-MNL-005", SafehouseId = sh1.SafehouseId, CaseStatus = "Active",  DateOfBirth = new DateOnly(2011, 10, 5),  Religion = "Catholic",  CaseCategory = "Neglected",   SubCatStreetChild = true, FamilyIs4Ps = true, CurrentRiskLevel = "Medium", InitialRiskLevel = "Medium", AssignedSocialWorker = "Maria Santos", DateOfAdmission = new DateOnly(2024, 1, 22), ReferralSource = "Community",          ReintegrationType = "Family Reunification", ReintegrationStatus = "Not Started",  CreatedAt = DateTime.UtcNow },
+        };
+        _db.Residents.AddRange(residents);
+        await _db.SaveChangesAsync();
+        seeded.Add($"{residents.Count} Residents");
+
+        var r = residents; // shorthand
+
+        // ── Process Recordings ─────────────────────────────────────────────────
+        var recordings = new List<ProcessRecording>
+        {
+            new ProcessRecording { ResidentId = r[0].ResidentId,  SessionDate = new DateOnly(2024, 1, 10), SocialWorker = "Maria Santos", SessionType = "Individual", SessionDurationMinutes = 60, EmotionalStateObserved = "Anxious",    EmotionalStateEnd = "Calm",    SessionNarrative = "Initial session focused on building rapport and assessing trauma history. Child expressed fear and distrust initially but gradually opened up. Discussed safety within the safehouse and established therapeutic boundaries.",               InterventionsApplied = "Trauma-informed care, play therapy, trust-building exercises",          FollowUpActions = "Schedule weekly sessions; coordinate with medical team for psychological assessment.", ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[0].ResidentId,  SessionDate = new DateOnly(2024, 2,  7), SocialWorker = "Maria Santos", SessionType = "Individual", SessionDurationMinutes = 45, EmotionalStateObserved = "Hopeful",    EmotionalStateEnd = "Hopeful", SessionNarrative = "Child demonstrated significant improvement in communication. Discussed family situation and expressed desire for family reunification. Role-play exercises helped in expressing emotions constructively.",                                     InterventionsApplied = "Cognitive behavioral therapy, family systems therapy",                   FollowUpActions = "Initiate family assessment for reunification planning.",                       ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[0].ResidentId,  SessionDate = new DateOnly(2024, 3, 12), SocialWorker = "Maria Santos", SessionType = "Individual", SessionDurationMinutes = 50, EmotionalStateObserved = "Calm",       EmotionalStateEnd = "Hopeful", SessionNarrative = "Child is showing sustained improvement. School performance has increased and peer relationships are forming. Discussed the upcoming family visit with excitement but also managed anxiety around expectations.",                         InterventionsApplied = "Strengths-based therapy, school readiness coaching",                     FollowUpActions = "Facilitate supervised family visit; debrief following visit.",                 ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[1].ResidentId,  SessionDate = new DateOnly(2024, 1, 15), SocialWorker = "Ana Reyes",    SessionType = "Individual", SessionDurationMinutes = 50, EmotionalStateObserved = "Distressed", EmotionalStateEnd = "Calm",    SessionNarrative = "Child presented with nightmares and hypervigilance. Session focused on grounding techniques and psychoeducation about trauma responses. Significant resistance to discussing past abuse but willingness to engage with art therapy.",       InterventionsApplied = "Grounding techniques, art therapy, psychoeducation",                     FollowUpActions = "Refer for psychiatric evaluation; increase session frequency to twice weekly.", ProgressNoted = false, ConcernsFlagged = true  },
+            new ProcessRecording { ResidentId = r[1].ResidentId,  SessionDate = new DateOnly(2024, 2, 12), SocialWorker = "Ana Reyes",    SessionType = "Individual", SessionDurationMinutes = 55, EmotionalStateObserved = "Anxious",    EmotionalStateEnd = "Calm",    SessionNarrative = "Follow-up session after psychiatric evaluation. Child beginning to respond to medication. Continued art therapy showed emerging ability to express trauma narratives. Discussed safety planning.",                                         InterventionsApplied = "Art therapy, safety planning, relaxation techniques",                    FollowUpActions = "Continue weekly sessions; review medication effectiveness with psychiatrist.",  ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[2].ResidentId,  SessionDate = new DateOnly(2024, 1, 20), SocialWorker = "Maria Santos", SessionType = "Individual", SessionDurationMinutes = 60, EmotionalStateObserved = "Withdrawn",  EmotionalStateEnd = "Anxious", SessionNarrative = "High-priority case. Child shows severe withdrawal and dissociative episodes. Extreme care taken to avoid retraumatization. Focus on establishing felt safety and basic therapeutic alliance.",                                               InterventionsApplied = "Somatic trauma therapy, safe space visualization, gentle grounding",     FollowUpActions = "Mandatory psychiatric consult; multidisciplinary case conference.",            ProgressNoted = false, ConcernsFlagged = true  },
+            new ProcessRecording { ResidentId = r[2].ResidentId,  SessionDate = new DateOnly(2024, 2, 20), SocialWorker = "Maria Santos", SessionType = "Individual", SessionDurationMinutes = 45, EmotionalStateObserved = "Withdrawn",  EmotionalStateEnd = "Calm",    SessionNarrative = "Slow but measurable progress. Child made eye contact and responded verbally for first time. Continued use of non-directive play therapy. Legal proceedings regarding trafficking network progressing.",                                    InterventionsApplied = "Non-directive play therapy, bibliotherapy",                              FollowUpActions = "Coordinate with legal team; continue biweekly sessions.",                     ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[3].ResidentId,  SessionDate = new DateOnly(2024, 1, 18), SocialWorker = "Ana Reyes",    SessionType = "Individual", SessionDurationMinutes = 45, EmotionalStateObserved = "Hopeful",    EmotionalStateEnd = "Hopeful", SessionNarrative = "Child is progressing well. Reunification timeline discussed. Child excited about returning home and maintaining friendships made at safehouse.",                                                                                               InterventionsApplied = "Future-focused therapy, transition planning",                            FollowUpActions = "Prepare transition plan; coordinate farewell activities with peer group.",     ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[4].ResidentId,  SessionDate = new DateOnly(2024, 1, 25), SocialWorker = "Jose Cruz",    SessionType = "Individual", SessionDurationMinutes = 45, EmotionalStateObserved = "Sad",        EmotionalStateEnd = "Calm",    SessionNarrative = "Child expresses grief over family separation. Session centered on normalization of grief responses and building coping strategies. Child shows strong resilience factors despite trauma history.",                                           InterventionsApplied = "Grief counseling, strengths-based approach, coping skills development",  FollowUpActions = "Explore recreational therapy options; assess school readiness.",               ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[5].ResidentId,  SessionDate = new DateOnly(2024, 2,  3), SocialWorker = "Jose Cruz",    SessionType = "Individual", SessionDurationMinutes = 40, EmotionalStateObserved = "Hopeful",    EmotionalStateEnd = "Hopeful", SessionNarrative = "Child is adjusting well to safehouse environment. Adoption process in early stages. Session discussed what adoption means and child's feelings about it. Child expressed cautious optimism.",                                                 InterventionsApplied = "Psychoeducation on adoption, emotional validation, future-focused therapy", FollowUpActions = "Prepare child for initial meeting with prospective family.",                  ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[6].ResidentId,  SessionDate = new DateOnly(2024, 3,  8), SocialWorker = "Jose Cruz",    SessionType = "Individual", SessionDurationMinutes = 45, EmotionalStateObserved = "Calm",       EmotionalStateEnd = "Hopeful", SessionNarrative = "Child recovering well from labor exploitation trauma. Shows positive engagement with education program. Discussed future goals and career aspirations. Strong motivation to continue schooling.",                                             InterventionsApplied = "Strengths-based therapy, future-oriented counseling, educational planning", FollowUpActions = "Coordinate school enrollment; vocational skills assessment.",                ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[7].ResidentId,  SessionDate = new DateOnly(2024, 2, 10), SocialWorker = "Maria Santos", SessionType = "Individual", SessionDurationMinutes = 60, EmotionalStateObserved = "Anxious",    EmotionalStateEnd = "Calm",    SessionNarrative = "Complex case involving online exploitation. Child struggles with shame and self-blame. Focus on psychoeducation about abuse, reducing self-blame, and rebuilding self-worth.",                                                              InterventionsApplied = "Trauma-focused CBT, shame reduction techniques, psychoeducation",        FollowUpActions = "Coordinate with legal team on digital evidence; continue biweekly sessions.",  ProgressNoted = true,  ConcernsFlagged = true  },
+            new ProcessRecording { ResidentId = r[8].ResidentId,  SessionDate = new DateOnly(2024, 2, 20), SocialWorker = "Ana Reyes",    SessionType = "Individual", SessionDurationMinutes = 50, EmotionalStateObserved = "Anxious",    EmotionalStateEnd = "Calm",    SessionNarrative = "Session focused on building trust and safety. Child from informal settler community shows strong family bonds despite challenges. Family reunification appears viable with appropriate support.",                                              InterventionsApplied = "Family systems therapy, community-based support planning",               FollowUpActions = "Schedule family assessment visit; connect family with community support.",     ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[9].ResidentId,  SessionDate = new DateOnly(2024, 3,  5), SocialWorker = "Ana Reyes",    SessionType = "Individual", SessionDurationMinutes = 55, EmotionalStateObserved = "Sad",        EmotionalStateEnd = "Calm",    SessionNarrative = "Child processing anger and abandonment from father figure. Session used narrative therapy to help child reframe story and identify sources of strength. Extended family support is present.",                                              InterventionsApplied = "Narrative therapy, anger management, family mapping",                    FollowUpActions = "Explore extended family placement options with grandmother.",                  ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[10].ResidentId, SessionDate = new DateOnly(2024, 3, 18), SocialWorker = "Jose Cruz",    SessionType = "Individual", SessionDurationMinutes = 40, EmotionalStateObserved = "Hopeful",    EmotionalStateEnd = "Hopeful", SessionNarrative = "Child adjusting beautifully to prospective adoptive family. Supervised visits going extremely well. Child calls prospective parents 'Mama' and 'Papa'. Transition to permanent placement on track.",                                       InterventionsApplied = "Adoption preparation, attachment-focused therapy",                       FollowUpActions = "Prepare final adoption assessment report.",                                    ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[11].ResidentId, SessionDate = new DateOnly(2024, 3, 15), SocialWorker = "Maria Santos", SessionType = "Individual", SessionDurationMinutes = 55, EmotionalStateObserved = "Anxious",    EmotionalStateEnd = "Calm",    SessionNarrative = "New resident initial assessment. Child shows signs of chronic neglect and food-insecurity anxiety. Basic trust in adults is limited. Focused on creating safe, predictable therapeutic environment.",                                      InterventionsApplied = "Basic needs safety planning, trust-building, psychoeducation",           FollowUpActions = "Nutritional assessment referral; school reintegration planning.",              ProgressNoted = true,  ConcernsFlagged = false },
+            new ProcessRecording { ResidentId = r[3].ResidentId,  SessionDate = new DateOnly(2024, 3,  5), SocialWorker = "Ana Reyes",    SessionType = "Group",      SessionDurationMinutes = 90, EmotionalStateObserved = "Hopeful",    EmotionalStateEnd = "Hopeful", SessionNarrative = "Group session for residents with family reunification plans. Shared experiences around hope and anticipation. Peer support dynamics were positive. Child demonstrated leadership qualities.",                                                   InterventionsApplied = "Group therapy, peer support facilitation, narrative therapy",            FollowUpActions = "Individual follow-up to consolidate group session insights.",                  ProgressNoted = true,  ConcernsFlagged = false },
+        };
+        _db.ProcessRecordings.AddRange(recordings);
+        await _db.SaveChangesAsync();
+        seeded.Add($"{recordings.Count} Process Recordings");
+
+        // ── Home Visitations ───────────────────────────────────────────────────
+        var visitations = new List<HomeVisitation>
+        {
+            new HomeVisitation { ResidentId = r[0].ResidentId,  VisitDate = new DateOnly(2024, 1, 20), SocialWorker = "Maria Santos", VisitType = "Initial Assessment",       LocationVisited = "Family home, Quezon City",          FamilyMembersPresent = "Mother, paternal aunt",           Purpose = "Assess family capacity for reunification",                    Observations = "Home environment is modest but clean. Mother appears sincere in desire to reunite. Father absent. Maternal support network is present.",                              FamilyCooperationLevel = "Highly Cooperative", SafetyConcernsNoted = false, FollowUpNeeded = true,  FollowUpNotes = "Schedule parenting skills workshop for mother", VisitOutcome = "Favorable"         },
+            new HomeVisitation { ResidentId = r[0].ResidentId,  VisitDate = new DateOnly(2024, 3, 18), SocialWorker = "Maria Santos", VisitType = "Routine Follow-Up",        LocationVisited = "Family home, Quezon City",          FamilyMembersPresent = "Mother, grandmother",             Purpose = "Monitor progress and prepare for reunification",              Observations = "Significant improvement. Mother completed parenting program. Home safety measures implemented. Grandmother providing regular support.",                                FamilyCooperationLevel = "Highly Cooperative", SafetyConcernsNoted = false, FollowUpNeeded = false, FollowUpNotes = null,                                            VisitOutcome = "Favorable"         },
+            new HomeVisitation { ResidentId = r[1].ResidentId,  VisitDate = new DateOnly(2024, 2,  5), SocialWorker = "Ana Reyes",    VisitType = "Initial Assessment",       LocationVisited = "Maternal relatives home, Caloocan",  FamilyMembersPresent = "Maternal aunt",                   Purpose = "Assess suitability of alternative family placement",          Observations = "Aunt is willing and capable. Home has sufficient space. No other children. Aunt employed as nurse. Background check pending.",                                        FamilyCooperationLevel = "Cooperative",        SafetyConcernsNoted = false, FollowUpNeeded = true,  FollowUpNotes = "Complete background check and home assessment report",  VisitOutcome = "Favorable"         },
+            new HomeVisitation { ResidentId = r[3].ResidentId,  VisitDate = new DateOnly(2024, 2, 28), SocialWorker = "Ana Reyes",    VisitType = "Routine Follow-Up",        LocationVisited = "Family home, Manila",               FamilyMembersPresent = "Mother, two siblings",            Purpose = "Reunification progress assessment",                           Observations = "Family dynamics improved. Mother engaged in livelihood program. Siblings excited about reunion. Home environment stable.",                                             FamilyCooperationLevel = "Highly Cooperative", SafetyConcernsNoted = false, FollowUpNeeded = false, FollowUpNotes = null,                                            VisitOutcome = "Favorable"         },
+            new HomeVisitation { ResidentId = r[4].ResidentId,  VisitDate = new DateOnly(2024, 1, 30), SocialWorker = "Jose Cruz",    VisitType = "Initial Assessment",       LocationVisited = "Extended family home, Mandaue City", FamilyMembersPresent = "Paternal grandparents",           Purpose = "Assess grandparents as potential foster caregivers",          Observations = "Grandparents elderly but highly motivated. Financial capacity limited. Home needs minor safety modifications. Strong emotional connection to child.",                  FamilyCooperationLevel = "Highly Cooperative", SafetyConcernsNoted = false, FollowUpNeeded = true,  FollowUpNotes = "Connect family with financial assistance; home safety check",    VisitOutcome = "Needs Improvement" },
+            new HomeVisitation { ResidentId = r[6].ResidentId,  VisitDate = new DateOnly(2024, 2, 15), SocialWorker = "Jose Cruz",    VisitType = "Routine Follow-Up",        LocationVisited = "Family home, Consolacion, Cebu",    FamilyMembersPresent = "Mother",                          Purpose = "Assess family environment post-intervention",                 Observations = "Stepfather removed per court order. Mother shows genuine remorse and completed counseling. Financial situation challenging.",                                          FamilyCooperationLevel = "Cooperative",        SafetyConcernsNoted = false, FollowUpNeeded = true,  FollowUpNotes = "Refer family to livelihood assistance program",          VisitOutcome = "Needs Improvement" },
+            new HomeVisitation { ResidentId = r[8].ResidentId,  VisitDate = new DateOnly(2024, 3,  1), SocialWorker = "Ana Reyes",    VisitType = "Reintegration Assessment", LocationVisited = "Family home, Davao City",            FamilyMembersPresent = "Mother, father, two siblings",    Purpose = "Final assessment for family reunification approval",          Observations = "Family well-prepared. Parents completed all required programs. Home environment safe and nurturing. Siblings maintain close bond with resident.",                     FamilyCooperationLevel = "Highly Cooperative", SafetyConcernsNoted = false, FollowUpNeeded = false, FollowUpNotes = null,                                            VisitOutcome = "Favorable"         },
+            new HomeVisitation { ResidentId = r[9].ResidentId,  VisitDate = new DateOnly(2024, 2, 22), SocialWorker = "Ana Reyes",    VisitType = "Initial Assessment",       LocationVisited = "Extended family home, Davao City",   FamilyMembersPresent = "Maternal grandmother",            Purpose = "Assess alternative placement options",                        Observations = "Grandmother caring but in poor health. Home conditions substandard. Child's primary abuser was mother's live-in partner. Safety concern if returned.",               FamilyCooperationLevel = "Neutral",            SafetyConcernsNoted = true,  FollowUpNeeded = true,  FollowUpNotes = "Explore foster placement; legal action against abuser",  VisitOutcome = "Unfavorable"       },
+            new HomeVisitation { ResidentId = r[2].ResidentId,  VisitDate = new DateOnly(2024, 3, 10), SocialWorker = "Maria Santos", VisitType = "Emergency",               LocationVisited = "Previously known address, Manila",   FamilyMembersPresent = "None located",                    Purpose = "Emergency welfare check following new trafficking information", Observations = "Address no longer occupied. Neighbors report family moved suddenly. Coordinating with police on trafficking case.",                                                   FamilyCooperationLevel = "Uncooperative",      SafetyConcernsNoted = true,  FollowUpNeeded = true,  FollowUpNotes = "Coordinate with law enforcement; maintain no-contact order", VisitOutcome = "Inconclusive"     },
+            new HomeVisitation { ResidentId = r[10].ResidentId, VisitDate = new DateOnly(2024, 3, 20), SocialWorker = "Jose Cruz",    VisitType = "Post-Placement Monitoring", LocationVisited = "Adoptive family home, Davao City",  FamilyMembersPresent = "Prospective adoptive parents",   Purpose = "Monitor child adjustment during pre-adoption placement",       Observations = "Child adjusting well. Adoptive parents are attentive and loving. Child showing increased confidence and engagement in activities.",                                  FamilyCooperationLevel = "Highly Cooperative", SafetyConcernsNoted = false, FollowUpNeeded = false, FollowUpNotes = null,                                            VisitOutcome = "Favorable"         },
+            new HomeVisitation { ResidentId = r[5].ResidentId,  VisitDate = new DateOnly(2024, 3, 25), SocialWorker = "Jose Cruz",    VisitType = "Post-Placement Monitoring", LocationVisited = "Prospective adoptive home, Cebu City", FamilyMembersPresent = "Prospective adoptive couple",  Purpose = "First supervised visit with prospective adoptive family",     Observations = "Child initially shy but quickly warmed to the family. Prospective parents are experienced with children. Environment is child-friendly and nurturing.",              FamilyCooperationLevel = "Highly Cooperative", SafetyConcernsNoted = false, FollowUpNeeded = true,  FollowUpNotes = "Schedule second supervised visit next month",           VisitOutcome = "Favorable"         },
+        };
+        _db.HomeVisitations.AddRange(visitations);
+        await _db.SaveChangesAsync();
+        seeded.Add($"{visitations.Count} Home Visitations");
+
+        // ── Donations ──────────────────────────────────────────────────────────
+        var donations = new List<Donation>
+        {
+            new Donation { SupporterId = s1.SupporterId, DonationType = "Monetary", DonationDate = new DateOnly(2024, 1, 15), IsRecurring = true,  CampaignName = "Annual Giving Campaign",       ChannelSource = "Website",         CurrencyCode = "PHP", Amount = 25000,  ImpactUnit = "pesos", Notes = "Monthly recurring donation" },
+            new Donation { SupporterId = s1.SupporterId, DonationType = "Monetary", DonationDate = new DateOnly(2024, 2, 15), IsRecurring = true,  CampaignName = "Annual Giving Campaign",       ChannelSource = "Website",         CurrencyCode = "PHP", Amount = 25000,  ImpactUnit = "pesos" },
+            new Donation { SupporterId = s1.SupporterId, DonationType = "Monetary", DonationDate = new DateOnly(2024, 3, 15), IsRecurring = true,  CampaignName = "Annual Giving Campaign",       ChannelSource = "Website",         CurrencyCode = "PHP", Amount = 25000,  ImpactUnit = "pesos" },
+            new Donation { SupporterId = s2.SupporterId, DonationType = "Monetary", DonationDate = new DateOnly(2024, 1, 10), IsRecurring = false, CampaignName = "Safehouse Operations Fund",    ChannelSource = "Direct",          CurrencyCode = "PHP", Amount = 150000, ImpactUnit = "pesos", Notes = "Annual corporate donation" },
+            new Donation { SupporterId = s2.SupporterId, DonationType = "Monetary", DonationDate = new DateOnly(2024, 3,  1), IsRecurring = false, CampaignName = "Education Support Program",    ChannelSource = "Event",           CurrencyCode = "PHP", Amount = 75000,  ImpactUnit = "pesos" },
+            new Donation { SupporterId = s3.SupporterId, DonationType = "Monetary", DonationDate = new DateOnly(2024, 2, 20), IsRecurring = false, CampaignName = "Child Welfare Campaign",       ChannelSource = "SocialMedia",     CurrencyCode = "USD", Amount = 500,    EstimatedValue = 28000, ImpactUnit = "pesos" },
+            new Donation { SupporterId = s3.SupporterId, DonationType = "Time",     DonationDate = new DateOnly(2024, 3,  5), IsRecurring = false, CampaignName = "Volunteer Program",            ChannelSource = "Website",         EstimatedValue = 5000,  ImpactUnit = "hours", Notes = "10 hours of English tutoring" },
+            new Donation { SupporterId = s4.SupporterId, DonationType = "InKind",   DonationDate = new DateOnly(2024, 1, 25), IsRecurring = false, CampaignName = "School Supplies Drive",        ChannelSource = "Church",          EstimatedValue = 15000, ImpactUnit = "items", Notes = "School supplies and books" },
+            new Donation { SupporterId = s4.SupporterId, DonationType = "InKind",   DonationDate = new DateOnly(2024, 3, 10), IsRecurring = false, CampaignName = "Nutrition Program",            ChannelSource = "Church",          EstimatedValue = 20000, ImpactUnit = "items", Notes = "Food packages and hygiene kits" },
+            new Donation { SupporterId = s5.SupporterId, DonationType = "Monetary", DonationDate = new DateOnly(2024, 1,  5), IsRecurring = false, CampaignName = "International Aid Grant",      ChannelSource = "PartnerReferral", CurrencyCode = "CAD", Amount = 5000,   EstimatedValue = 185000, ImpactUnit = "pesos", Notes = "Annual international grant" },
+        };
+        _db.Donations.AddRange(donations);
+        await _db.SaveChangesAsync();
+        seeded.Add($"{donations.Count} Donations");
+
+        // ── Donation Allocations ───────────────────────────────────────────────
+        _db.DonationAllocations.AddRange(
+            new DonationAllocation { DonationId = donations[0].DonationId, SafehouseId = sh1.SafehouseId, ProgramArea = "Wellbeing",  AmountAllocated = 15000, AllocationDate = new DateOnly(2024, 1, 20), AllocationNotes = "Counseling services and psychological support" },
+            new DonationAllocation { DonationId = donations[0].DonationId, SafehouseId = sh1.SafehouseId, ProgramArea = "Education",  AmountAllocated = 10000, AllocationDate = new DateOnly(2024, 1, 20), AllocationNotes = "School materials and tutoring" },
+            new DonationAllocation { DonationId = donations[1].DonationId, SafehouseId = sh1.SafehouseId, ProgramArea = "Operations", AmountAllocated = 15000, AllocationDate = new DateOnly(2024, 2, 20), AllocationNotes = "Safehouse utilities and maintenance" },
+            new DonationAllocation { DonationId = donations[1].DonationId, SafehouseId = sh2.SafehouseId, ProgramArea = "Wellbeing",  AmountAllocated = 10000, AllocationDate = new DateOnly(2024, 2, 20), AllocationNotes = "Health and wellness activities" },
+            new DonationAllocation { DonationId = donations[2].DonationId, SafehouseId = sh1.SafehouseId, ProgramArea = "Education",  AmountAllocated = 25000, AllocationDate = new DateOnly(2024, 3, 20), AllocationNotes = "Q1 education program support" },
+            new DonationAllocation { DonationId = donations[3].DonationId, SafehouseId = sh1.SafehouseId, ProgramArea = "Operations", AmountAllocated = 60000, AllocationDate = new DateOnly(2024, 1, 15), AllocationNotes = "Annual operations support - Manila" },
+            new DonationAllocation { DonationId = donations[3].DonationId, SafehouseId = sh2.SafehouseId, ProgramArea = "Operations", AmountAllocated = 50000, AllocationDate = new DateOnly(2024, 1, 15), AllocationNotes = "Annual operations support - Cebu" },
+            new DonationAllocation { DonationId = donations[3].DonationId, SafehouseId = sh3.SafehouseId, ProgramArea = "Operations", AmountAllocated = 40000, AllocationDate = new DateOnly(2024, 1, 15), AllocationNotes = "Annual operations support - Davao" },
+            new DonationAllocation { DonationId = donations[4].DonationId, SafehouseId = sh1.SafehouseId, ProgramArea = "Education",  AmountAllocated = 40000, AllocationDate = new DateOnly(2024, 3,  5), AllocationNotes = "Scholarship and school fees - Manila" },
+            new DonationAllocation { DonationId = donations[4].DonationId, SafehouseId = sh2.SafehouseId, ProgramArea = "Education",  AmountAllocated = 35000, AllocationDate = new DateOnly(2024, 3,  5), AllocationNotes = "Scholarship and school fees - Cebu" },
+            new DonationAllocation { DonationId = donations[5].DonationId, SafehouseId = sh2.SafehouseId, ProgramArea = "Wellbeing",  AmountAllocated = 28000, AllocationDate = new DateOnly(2024, 2, 25), AllocationNotes = "Psychosocial support program" },
+            new DonationAllocation { DonationId = donations[9].DonationId, SafehouseId = sh1.SafehouseId, ProgramArea = "Outreach",   AmountAllocated = 70000, AllocationDate = new DateOnly(2024, 1, 10), AllocationNotes = "Community outreach and prevention" },
+            new DonationAllocation { DonationId = donations[9].DonationId, SafehouseId = sh2.SafehouseId, ProgramArea = "Education",  AmountAllocated = 60000, AllocationDate = new DateOnly(2024, 1, 10), AllocationNotes = "Education program enhancement" },
+            new DonationAllocation { DonationId = donations[9].DonationId, SafehouseId = sh3.SafehouseId, ProgramArea = "Wellbeing",  AmountAllocated = 55000, AllocationDate = new DateOnly(2024, 1, 10), AllocationNotes = "Trauma recovery program" }
+        );
+        await _db.SaveChangesAsync();
+        seeded.Add("14 Donation Allocations");
+
+        // ── In-Kind Donation Items ─────────────────────────────────────────────
+        _db.InKindDonationItems.AddRange(
+            new InKindDonationItem { DonationId = donations[7].DonationId, ItemName = "School Backpacks",      ItemCategory = "SchoolMaterials", Quantity = 20, UnitOfMeasure = "pcs",  EstimatedUnitValue = 350,  IntendedUse = "Education", ReceivedCondition = "New"  },
+            new InKindDonationItem { DonationId = donations[7].DonationId, ItemName = "Notebooks and Pens",    ItemCategory = "SchoolMaterials", Quantity = 50, UnitOfMeasure = "sets", EstimatedUnitValue = 120,  IntendedUse = "Education", ReceivedCondition = "New"  },
+            new InKindDonationItem { DonationId = donations[8].DonationId, ItemName = "Rice (50kg sacks)",     ItemCategory = "Food",            Quantity = 10, UnitOfMeasure = "kg",   EstimatedUnitValue = 1200, IntendedUse = "Meals",     ReceivedCondition = "New"  },
+            new InKindDonationItem { DonationId = donations[8].DonationId, ItemName = "Hygiene Kits",          ItemCategory = "Hygiene",         Quantity = 30, UnitOfMeasure = "sets", EstimatedUnitValue = 250,  IntendedUse = "Hygiene",   ReceivedCondition = "New"  },
+            new InKindDonationItem { DonationId = donations[8].DonationId, ItemName = "Vitamins and Medicine",  ItemCategory = "Medical",         Quantity = 5,  UnitOfMeasure = "boxes",EstimatedUnitValue = 800,  IntendedUse = "Health",    ReceivedCondition = "New"  }
+        );
+        await _db.SaveChangesAsync();
+        seeded.Add("5 In-Kind Donation Items");
+
+        return Ok(new { message = "✅ Full seed completed successfully!", seeded });
     }
 }

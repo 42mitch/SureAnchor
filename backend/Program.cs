@@ -1,6 +1,7 @@
 using Backend.Data;
 using Backend.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -60,10 +61,19 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(
-            "http://localhost:5173",
-            "https://zealous-tree-029394910.6.azurestaticapps.net"
-            )
+        var configuredOrigins = builder.Configuration["Cors:AllowedOrigins"]?
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            ?? Array.Empty<string>();
+
+        var allowedOrigins = configuredOrigins.Length > 0
+            ? configuredOrigins
+            : new[]
+            {
+                "http://localhost:5173",
+                "https://zealous-tree-029394910.6.azurestaticapps.net"
+            };
+
+        policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -76,6 +86,12 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+// Respect X-Forwarded-* headers from Azure reverse proxy so cookies and redirects behave correctly.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
