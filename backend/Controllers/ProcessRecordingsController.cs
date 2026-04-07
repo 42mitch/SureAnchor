@@ -48,6 +48,7 @@ public class ProcessRecordingsController : ControllerBase
     {
         var rec = new ProcessRecording
         {
+            RecordingId = (_db.ProcessRecordings.Any() ? _db.ProcessRecordings.Max(r => r.RecordingId) : 0) + 1,
             ResidentId = dto.ResidentId,
             SessionDate = DateOnly.Parse(dto.SessionDate),
             SocialWorker = dto.SocialWorker,
