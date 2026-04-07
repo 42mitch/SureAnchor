@@ -77,26 +77,33 @@ const incidentTypeLabel: Record<string, string> = {
 };
 
 // ── CollapseCard ──────────────────────────────────────────────────────────────
-// Captures real pixel height via useLayoutEffect (before paint) so the
-// max-height transition has a concrete start value and cards shift up smoothly.
+// Uses direct DOM ref manipulation (no React state) so the browser sees a clean
+// maxHeight value before any transition fires — avoids the re-render timing
+// issue that breaks CSS transitions when using useState.
 
 function CollapseCard({ removing, children }: { removing: boolean; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [naturalH, setNaturalH] = useState<string>('none');
 
+  // Pin max-height to the real content height synchronously before first paint.
   useLayoutEffect(() => {
-    if (ref.current) setNaturalH(ref.current.scrollHeight + 'px');
+    const el = ref.current;
+    if (!el) return;
+    el.style.maxHeight = el.scrollHeight + 'px';
   }, []);
+
+  // When removing flips true, push max-height → 0 directly on the DOM node.
+  // No setState → no extra re-render → transition fires cleanly every time.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !removing) return;
+    el.style.maxHeight = '0px';
+    el.style.opacity = '0';
+  }, [removing]);
 
   return (
     <div
       ref={ref}
-      style={{
-        maxHeight: removing ? '0px' : naturalH,
-        opacity: removing ? 0 : 1,
-        overflow: 'hidden',
-        transition: 'max-height 0.35s ease, opacity 0.25s ease',
-      }}
+      style={{ overflow: 'hidden', transition: 'max-height 0.38s ease, opacity 0.28s ease' }}
     >
       <div className="pb-3">{children}</div>
     </div>
