@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    font-family: 'DM Sans', sans-serif;
+    background-color: #F7F5F1;
+    color: #2C2C2C;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  #root {
+    width: 100%;
+    min-height: 100vh;
+  }
+  h1, h2, h3 {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-teal text-white font-semibold px-6 py-3 rounded-lg hover:bg-teal-dark transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+  .btn-outline {
+    @apply border-2 border-teal text-teal font-semibold px-6 py-3 rounded-lg hover:bg-teal hover:text-white transition-all duration-200;
+  }
+  .btn-gold {
+    @apply bg-gold text-navy font-semibold px-6 py-3 rounded-lg hover:bg-gold-light transition-all duration-200 shadow-sm;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-card p-6;
+  }
+  .badge-low {
+    @apply bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-medium {
+    @apply bg-yellow-100 text-yellow-700 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-high {
+    @apply bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-critical {
+    @apply bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+}
