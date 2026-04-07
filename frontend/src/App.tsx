@@ -13,6 +13,7 @@ import DonorsPage from './pages/DonorsPage';
 import ReportsPage from './pages/ReportsPage';
 import VisitationsPage from './pages/VisitationsPage';
 import ResidentProfilePage from './pages/ResidentProfilePage';
+import SafetyPage from './pages/SafetyPage';
 
 function App() {
   return (
@@ -66,6 +67,13 @@ function App() {
           <Route path="/admin/resident/:id" element={
             <RequireAuth roles={['Admin', 'Staff']}>
               <ResidentProfilePage />
+            </RequireAuth>
+          } />
+
+          {/* Admin-only pages */}
+          <Route path="/admin/safety" element={
+            <RequireAuth roles={['Admin']}>
+              <SafetyPage />
             </RequireAuth>
           } />
         </Routes>

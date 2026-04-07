@@ -118,6 +118,18 @@ public class ResidentsController : ControllerBase
         return NoContent();
     }
 
+    // ── PATCH /api/residents/{id}/risk-level ─────────────────────────────────
+    [HttpPatch("{id:int}/risk-level")]
+    public async Task<IActionResult> UpdateRiskLevel(int id, [FromBody] RiskLevelDto dto)
+    {
+        var resident = await _db.Residents.FindAsync(id);
+        if (resident == null) return NotFound();
+
+        resident.CurrentRiskLevel = dto.RiskLevel;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     // ── DELETE /api/residents/{id} ────────────────────────────────────────────
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]
@@ -177,3 +189,5 @@ public record ResidentWriteDto(
     DateOnly? DateOfBirth,
     DateOnly? DateOfAdmission
 );
+
+public record RiskLevelDto(string? RiskLevel);

@@ -123,6 +123,7 @@ function NewSessionModal({ residents, onClose, onSaved }: {
     socialWorker: '', sessionType: 'Individual', emotionalStateObserved: 'Calm',
     sessionNarrative: '', interventionsApplied: '', followUpActions: '',
     progressNoted: false, concernsFlagged: false,
+    riskLevel: '',
   });
 
   function set(key: string, value: string | boolean) { setForm(prev => ({ ...prev, [key]: value })); }
@@ -130,15 +131,25 @@ function NewSessionModal({ residents, onClose, onSaved }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    const residentId = parseInt(form.residentId);
     const res = await apiFetch('/api/process-recordings', {
       method: 'POST',
-      body: JSON.stringify({ ...form, residentId: parseInt(form.residentId) }),
+      body: JSON.stringify({ ...form, residentId }),
     });
     if (res.ok) {
       const { recordingId } = await res.json();
-      const resident = residents.find(r => r.residentId === parseInt(form.residentId));
+      const resident = residents.find(r => r.residentId === residentId);
+
+      // Update the resident's risk level if one was selected
+      if (form.riskLevel) {
+        await apiFetch(`/api/residents/${residentId}/risk-level`, {
+          method: 'PATCH',
+          body: JSON.stringify({ riskLevel: form.riskLevel }),
+        });
+      }
+
       onSaved({
-        recordingId, residentId: parseInt(form.residentId),
+        recordingId, residentId,
         residentCode: resident?.internalCode ?? form.residentId,
         sessionDate: form.sessionDate, socialWorker: form.socialWorker,
         sessionType: form.sessionType, emotionalState: form.emotionalStateObserved,
@@ -194,6 +205,18 @@ function NewSessionModal({ residents, onClose, onSaved }: {
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                 {['Calm', 'Hopeful', 'Anxious', 'Distressed', 'Reflective', 'Withdrawn', 'Happy', 'Angry', 'Sad'].map(s => <option key={s}>{s}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Update Risk Level</label>
+              <select value={form.riskLevel} onChange={e => set('riskLevel', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                <option value="">No change</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+              <p className="text-xs text-dark/35 mt-1.5">If selected, this will update the resident's current risk level in their profile.</p>
             </div>
           </div>
           <div>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, Home, HeartHandshake,
-  BarChart2, Settings, LogOut, Menu, ChevronRight
+  BarChart2, Settings, LogOut, Menu, ChevronRight, ShieldAlert
 } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
@@ -66,6 +66,23 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             {isActive(href) && <ChevronRight size={14} className="text-gold/70" />}
           </Link>
         ))}
+
+        {/* Admin-only: Safety Overview */}
+        {user?.roles.includes('Admin') && (
+          <Link
+            to="/admin/safety"
+            onClick={() => setSidebarOpen(false)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group ${
+              isActive('/admin/safety')
+                ? 'bg-red-500/20 text-red-200 shadow-sm'
+                : 'text-red-300/70 hover:text-red-200 hover:bg-red-500/10'
+            }`}
+          >
+            <ShieldAlert size={18} strokeWidth={isActive('/admin/safety') ? 2.2 : 1.8} />
+            <span className="flex-1">Safety</span>
+            {isActive('/admin/safety') && <ChevronRight size={14} className="text-red-300/70" />}
+          </Link>
+        )}
       </nav>
 
       <div className="px-3 pb-4 border-t border-white/10 pt-4 space-y-0.5">
@@ -116,7 +133,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <Menu size={20} />
             </button>
             <div className="text-sm font-medium text-dark/50">
-              {navItems.find(n => isActive(n.href))?.label || 'Admin'}
+              {isActive('/admin/safety') ? 'Safety' : navItems.find(n => isActive(n.href))?.label || 'Admin'}
             </div>
           </div>
           <div className="flex items-center gap-3">
