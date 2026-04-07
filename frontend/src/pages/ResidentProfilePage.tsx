@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, User, FileText, Home, Shield, Calendar,
@@ -11,6 +11,17 @@ import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import {
   EditResidentModal,
   ResidentSessionEditModal,
@@ -82,6 +93,71 @@ interface EducationRecord {
   progressPercent: number | null;
   completionStatus: string;
   notes: string;
+}
+
+function parseRecordDate(d: string): Date | null {
+  if (!d) return null;
+  const parsed = new Date(d);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** Group key: calendar month from record date (schoolName is legacy month label only). */
+function yearMonthKey(recordDate: string): string {
+  const dt = parseRecordDate(recordDate);
+  if (!dt) return '0000-00';
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthYearLabel(recordDate: string): string {
+  const dt = parseRecordDate(recordDate);
+  if (!dt) return '—';
+  return dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+interface EducationMonthRow {
+  /** Full label for tooltips / summary */
+  monthLabel: string;
+  /** Compact x-axis label */
+  shortMonth: string;
+  sortKey: string;
+  attendance: number | null;
+  progress: number | null;
+  recordCount: number;
+}
+
+function buildEducationMonthSeries(records: EducationRecord[]): EducationMonthRow[] {
+  const byKey = new Map<string, EducationRecord[]>();
+  for (const r of records) {
+    const key = yearMonthKey(r.recordDate);
+    const list = byKey.get(key) ?? [];
+    list.push(r);
+    byKey.set(key, list);
+  }
+  const keys = [...byKey.keys()].filter(k => k !== '0000-00').sort();
+  return keys.map((key) => {
+    const group = byKey.get(key)!;
+    group.sort(
+      (a, b) =>
+        (parseRecordDate(a.recordDate)?.getTime() ?? 0) -
+        (parseRecordDate(b.recordDate)?.getTime() ?? 0)
+    );
+    const anchor = group[0];
+    const dt = parseRecordDate(anchor.recordDate);
+    const monthLabel = formatMonthYearLabel(anchor.recordDate);
+    const shortMonth =
+      dt?.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) ?? '—';
+    const attVals = group.map((g) => g.attendanceRate).filter((x): x is number => x != null);
+    const progVals = group.map((g) => g.progressPercent).filter((x): x is number => x != null);
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    return {
+      monthLabel,
+      shortMonth,
+      sortKey: key,
+      attendance: attVals.length ? round1(attVals.reduce((a, b) => a + b, 0) / attVals.length) : null,
+      progress: progVals.length ? round1(progVals.reduce((a, b) => a + b, 0) / progVals.length) : null,
+      recordCount: group.length,
+    };
+  });
 }
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
@@ -196,7 +272,41 @@ export default function ResidentProfilePage() {
 
   const sessPag = useListPagination(sessions, [id, sessions.length]);
   const visitPag = useListPagination(visitations, [id, visitations.length]);
-  const eduPag = useListPagination(educationRecords, [id, educationRecords.length]);
+
+  const educationMonthSeries = useMemo(
+    () => buildEducationMonthSeries(educationRecords),
+    [educationRecords]
+  );
+
+  const educationSummary = useMemo(() => {
+    if (educationRecords.length === 0) return null;
+    const allAtt = educationRecords
+      .map((r) => r.attendanceRate)
+      .filter((x): x is number => x != null);
+    const allProg = educationRecords
+      .map((r) => r.progressPercent)
+      .filter((x): x is number => x != null);
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    const latest = [...educationRecords].sort(
+      (a, b) =>
+        (parseRecordDate(b.recordDate)?.getTime() ?? 0) -
+        (parseRecordDate(a.recordDate)?.getTime() ?? 0)
+    )[0];
+    const spanLabel =
+      educationMonthSeries.length >= 1
+        ? `${educationMonthSeries[0].monthLabel} → ${educationMonthSeries[educationMonthSeries.length - 1].monthLabel}`
+        : '—';
+    return {
+      monthCount: educationMonthSeries.length,
+      recordCount: educationRecords.length,
+      avgAttendance: allAtt.length ? round1(allAtt.reduce((a, b) => a + b, 0) / allAtt.length) : null,
+      avgProgress: allProg.length ? round1(allProg.reduce((a, b) => a + b, 0) / allProg.length) : null,
+      latestLevel: latest?.educationLevel?.trim() || '—',
+      latestEnrollment: latest?.enrollmentStatus?.trim() || '—',
+      latestCompletion: latest?.completionStatus?.trim() || '—',
+      spanLabel,
+    };
+  }, [educationRecords, educationMonthSeries]);
 
   function reloadResident() {
     if (!id) return;
@@ -695,71 +805,233 @@ export default function ResidentProfilePage() {
 
         {/* ── EDUCATION TAB ─────────────────────────────────────────────────── */}
         {activeTab === 'education' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {educationRecords.length === 0 ? (
               <div className="card text-center py-16">
                 <GraduationCap size={40} className="text-dark/20 mx-auto mb-3" />
                 <p className="font-display text-lg font-semibold text-navy mb-1">No Education Records</p>
                 <p className="text-dark/45 text-sm">Education records for this resident will appear here.</p>
               </div>
-            ) : (
+            ) : educationSummary && (
               <>
-                {eduPag.pageItems.map((rec) => (
-                  <div key={rec.educationRecordId} className="card hover:shadow-card-hover transition-all duration-200">
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-navy/8 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <GraduationCap size={18} className="text-navy" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-navy">{rec.schoolName || '—'}</p>
-                          <p className="text-xs text-dark/40 font-medium mt-0.5">{rec.recordDate}</p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal/10 text-teal-dark self-start">
-                        {rec.enrollmentStatus || '—'}
-                      </span>
+                <p className="text-dark/45 text-sm -mt-2">
+                  Progress is shown by calendar month (from record dates). Multiple entries in the same month are averaged.
+                </p>
+
+                {/* Summary — general information */}
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    {
+                      label: 'Months with data',
+                      value: String(educationSummary.monthCount),
+                      sub: `${educationSummary.recordCount} total entr${educationSummary.recordCount === 1 ? 'y' : 'ies'}`,
+                      accent: 'from-navy to-navy-light',
+                    },
+                    {
+                      label: 'Avg. attendance',
+                      value:
+                        educationSummary.avgAttendance != null
+                          ? `${educationSummary.avgAttendance}%`
+                          : '—',
+                      sub: 'Across all records',
+                      accent: 'from-teal to-teal-dark',
+                    },
+                    {
+                      label: 'Avg. progress',
+                      value:
+                        educationSummary.avgProgress != null
+                          ? `${educationSummary.avgProgress}%`
+                          : '—',
+                      sub: 'Curriculum / goals',
+                      accent: 'from-yellow-600 to-gold',
+                    },
+                    {
+                      label: 'Reporting span',
+                      value:
+                        educationSummary.monthCount > 0
+                          ? `${educationSummary.monthCount} mo.`
+                          : '—',
+                      sub: educationSummary.spanLabel,
+                      accent: 'from-slate-600 to-slate-700',
+                    },
+                  ].map(({ label, value, sub, accent }) => (
+                    <div
+                      key={label}
+                      className={`rounded-2xl bg-gradient-to-br ${accent} text-white p-5 shadow-card`}
+                    >
+                      <p className="text-white/75 text-xs font-semibold uppercase tracking-wide mb-2">{label}</p>
+                      <p className="font-display text-2xl font-bold mb-1">{value}</p>
+                      <p className="text-white/65 text-xs leading-snug">{sub}</p>
                     </div>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Level</p>
-                        <p className="font-medium text-dark">{rec.educationLevel || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Completion</p>
-                        <p className="font-medium text-dark">{rec.completionStatus || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Attendance</p>
-                        <p className="font-medium text-dark">
-                          {rec.attendanceRate != null ? `${rec.attendanceRate}%` : '—'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Progress</p>
-                        <p className="font-medium text-dark">
-                          {rec.progressPercent != null ? `${rec.progressPercent}%` : '—'}
-                        </p>
-                      </div>
+                  ))}
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-9 h-9 rounded-xl bg-navy/8 flex items-center justify-center">
+                      <GraduationCap size={18} className="text-navy" />
                     </div>
-                    {rec.notes && (
-                      <div className="mt-4 pt-4 border-t border-dark/6">
-                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Notes</p>
-                        <p className="text-sm text-dark/70 leading-relaxed">{rec.notes}</p>
-                      </div>
-                    )}
+                    <div>
+                      <h2 className="font-display text-lg font-semibold text-navy">Latest snapshot</h2>
+                      <p className="text-dark/45 text-sm">From the most recent education record</p>
+                    </div>
                   </div>
-                ))}
-                <ListPaginationBar
-                  page={eduPag.page}
-                  pageCount={eduPag.pageCount}
-                  pageSize={eduPag.pageSize}
-                  setPage={eduPag.setPage}
-                  setPageSize={eduPag.setPageSize}
-                  total={eduPag.total}
-                  startIndex={eduPag.startIndex}
-                  endIndex={eduPag.endIndex}
-                />
+                  <div className="grid sm:grid-cols-3 gap-6 text-sm">
+                    <div>
+                      <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Education level</p>
+                      <p className="font-semibold text-dark">{educationSummary.latestLevel}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Enrollment</p>
+                      <p className="font-semibold text-dark">{educationSummary.latestEnrollment}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Completion status</p>
+                      <p className="font-semibold text-dark">{educationSummary.latestCompletion}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Charts — by month */}
+                <div className="grid lg:grid-cols-2 gap-6">
+                  <div className="card">
+                    <h2 className="font-display text-lg font-semibold text-navy mb-1">Attendance by month</h2>
+                    <p className="text-dark/45 text-sm mb-4">Average % where reported</p>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={educationMonthSeries} barSize={28}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+                        <XAxis
+                          dataKey="shortMonth"
+                          tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                          axisLine={false}
+                          tickLine={false}
+                          domain={[0, 100]}
+                          tickFormatter={(v) => `${v}%`}
+                        />
+                        <Tooltip
+                          formatter={(value: unknown) => {
+                            const n = typeof value === 'number' ? value : Number(value);
+                            return !Number.isNaN(n) && value != null && value !== ''
+                              ? [`${n}%`, 'Attendance']
+                              : ['—', 'Attendance'];
+                          }}
+                          labelFormatter={(_, payload) =>
+                            (payload?.[0]?.payload as EducationMonthRow | undefined)?.monthLabel ?? ''
+                          }
+                          contentStyle={{
+                            borderRadius: 12,
+                            border: '1px solid rgba(0,0,0,0.06)',
+                            fontSize: 13,
+                          }}
+                        />
+                        <Bar dataKey="attendance" name="Attendance" fill="#2D8F8A" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="card">
+                    <h2 className="font-display text-lg font-semibold text-navy mb-1">Progress by month</h2>
+                    <p className="text-dark/45 text-sm mb-4">Average % toward goals</p>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={educationMonthSeries} barSize={28}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+                        <XAxis
+                          dataKey="shortMonth"
+                          tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                          axisLine={false}
+                          tickLine={false}
+                          domain={[0, 100]}
+                          tickFormatter={(v) => `${v}%`}
+                        />
+                        <Tooltip
+                          formatter={(value: unknown) => {
+                            const n = typeof value === 'number' ? value : Number(value);
+                            return !Number.isNaN(n) && value != null && value !== ''
+                              ? [`${n}%`, 'Progress']
+                              : ['—', 'Progress'];
+                          }}
+                          labelFormatter={(_, payload) =>
+                            (payload?.[0]?.payload as EducationMonthRow | undefined)?.monthLabel ?? ''
+                          }
+                          contentStyle={{
+                            borderRadius: 12,
+                            border: '1px solid rgba(0,0,0,0.06)',
+                            fontSize: 13,
+                          }}
+                        />
+                        <Bar dataKey="progress" name="Progress" fill="#1B3A5C" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <h2 className="font-display text-lg font-semibold text-navy mb-1">Trend over time</h2>
+                  <p className="text-dark/45 text-sm mb-4">Attendance and progress together</p>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={educationMonthSeries}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+                      <XAxis
+                        dataKey="shortMonth"
+                        tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                        axisLine={false}
+                        tickLine={false}
+                        domain={[0, 100]}
+                        tickFormatter={(v) => `${v}%`}
+                      />
+                      <Tooltip
+                        formatter={(value: unknown, name: unknown) => {
+                          const n = typeof value === 'number' ? value : Number(value);
+                          const label = String(name ?? '');
+                          return !Number.isNaN(n) && value != null && value !== ''
+                            ? [`${n}%`, label]
+                            : ['—', label];
+                        }}
+                        labelFormatter={(_, payload) =>
+                          (payload?.[0]?.payload as EducationMonthRow | undefined)?.monthLabel ?? ''
+                        }
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: '1px solid rgba(0,0,0,0.06)',
+                          fontSize: 13,
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="attendance"
+                        name="Attendance"
+                        stroke="#2D8F8A"
+                        strokeWidth={2.5}
+                        dot={{ fill: '#2D8F8A', r: 4 }}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="progress"
+                        name="Progress"
+                        stroke="#1B3A5C"
+                        strokeWidth={2.5}
+                        dot={{ fill: '#1B3A5C', r: 4 }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </>
             )}
           </div>
