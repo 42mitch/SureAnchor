@@ -4,12 +4,6 @@ import { Eye, EyeOff, Lock, Mail, ArrowRight } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
 
-function redirectForRoles(roles: string[]): string {
-  if (roles.includes('Admin') || roles.includes('Staff')) return '/admin';
-  if (roles.includes('Donor')) return '/donor';
-  return '/';
-}
-
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
