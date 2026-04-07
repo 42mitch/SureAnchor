@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   HeartHandshake, Users, Sparkles, Plus, X, Trash2, Search,
-  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw
+  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -77,11 +77,176 @@ const typeBadge = (type: string) => {
   );
 };
 
+// ─── Edit Donation Modal (Admin) ──────────────────────────────────────────────
+
+function EditDonationModal({
+  donation,
+  supporterId,
+  onClose,
+  onSaved,
+}: {
+  donation: DonationRow;
+  supporterId: number;
+  onClose: () => void;
+  onSaved: (d: DonationRow) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    donationType: donation.donationType,
+    donationDate: donation.donationDate,
+    isRecurring: donation.isRecurring,
+    campaignName: donation.campaignName ?? '',
+    channelSource: donation.channelSource ?? '',
+    currencyCode: donation.currencyCode || 'PHP',
+    amount: donation.amount != null ? String(donation.amount) : '',
+    estimatedValue: donation.estimatedValue != null ? String(donation.estimatedValue) : '',
+    impactUnit: donation.impactUnit ?? '',
+    notes: donation.notes ?? '',
+  });
+
+  function set(key: string, value: string | boolean) {
+    setForm(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const amount = form.amount.trim() === '' ? null : parseFloat(form.amount);
+    const estimatedValue = form.estimatedValue.trim() === '' ? null : parseFloat(form.estimatedValue);
+    const res = await apiFetch(`/api/donations/${donation.donationId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        supporterId,
+        donationType: form.donationType,
+        donationDate: form.donationDate,
+        isRecurring: form.isRecurring,
+        campaignName: form.campaignName.trim() || null,
+        channelSource: form.channelSource.trim() || null,
+        currencyCode: form.currencyCode.trim() || 'PHP',
+        amount: Number.isFinite(amount as number) ? amount : null,
+        estimatedValue: Number.isFinite(estimatedValue as number) ? estimatedValue : null,
+        impactUnit: form.impactUnit.trim() || null,
+        notes: form.notes.trim() || null,
+      }),
+    });
+    if (res.ok) {
+      onSaved({
+        ...donation,
+        donationType: form.donationType,
+        donationDate: form.donationDate,
+        isRecurring: form.isRecurring,
+        campaignName: form.campaignName.trim() || null,
+        channelSource: form.channelSource.trim() || null,
+        currencyCode: form.currencyCode.trim() || 'PHP',
+        amount: Number.isFinite(amount as number) ? amount : null,
+        estimatedValue: Number.isFinite(estimatedValue as number) ? estimatedValue : null,
+        impactUnit: form.impactUnit.trim() || null,
+        notes: form.notes.trim() || null,
+      });
+      onClose();
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
+        <div className="sticky top-0 bg-white rounded-t-3xl px-6 py-5 border-b border-dark/8 flex items-center justify-between z-10">
+          <div>
+            <h2 className="font-display text-xl font-bold text-navy">Edit donation</h2>
+            <p className="text-xs text-dark/40 mt-0.5">Donation #{donation.donationId}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-dark/35 hover:text-dark hover:bg-dark/6 rounded-lg p-1.5 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <form className="p-6 space-y-4" onSubmit={handleSubmit}>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Type</label>
+              <select value={form.donationType} onChange={e => set('donationType', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {['Monetary', 'InKind', 'Time'].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Date</label>
+              <input type="date" required value={form.donationDate} onChange={e => set('donationDate', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-dark/70 cursor-pointer">
+                <input type="checkbox" checked={form.isRecurring} onChange={e => set('isRecurring', e.target.checked)} className="w-4 h-4 accent-teal" />
+                Recurring donation
+              </label>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Campaign name</label>
+              <input value={form.campaignName} onChange={e => set('campaignName', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Channel</label>
+              <select value={form.channelSource} onChange={e => set('channelSource', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                <option value="">—</option>
+                {['Website', 'SocialMedia', 'Event', 'Direct', 'WordOfMouth', 'PartnerReferral', 'Church'].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Currency</label>
+              <input value={form.currencyCode} onChange={e => set('currencyCode', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Amount</label>
+              <input type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)}
+                placeholder="Leave empty for in-kind/time"
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Est. value (PHP)</label>
+              <input type="number" step="0.01" min="0" value={form.estimatedValue} onChange={e => set('estimatedValue', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Impact unit</label>
+              <input value={form.impactUnit} onChange={e => set('impactUnit', e.target.value)} placeholder="e.g. pesos, hours"
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Notes</label>
+              <textarea rows={3} value={form.notes} onChange={e => set('notes', e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none" />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary text-sm disabled:opacity-60">{saving ? 'Saving...' : 'Save changes'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Donor Detail Modal ───────────────────────────────────────────────────────
 
-function DonorDetailModal({ supporterId, onClose }: { supporterId: number; onClose: () => void }) {
+function DonorDetailModal({
+  supporterId,
+  isAdmin,
+  onClose,
+  onDonationsUpdated,
+}: {
+  supporterId: number;
+  isAdmin: boolean;
+  onClose: () => void;
+  onDonationsUpdated?: () => void;
+}) {
   const [detail, setDetail] = useState<SupporterDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editingDonation, setEditingDonation] = useState<DonationRow | null>(null);
 
   useEffect(() => {
     apiFetch(`/api/supporters/${supporterId}`)
@@ -193,7 +358,22 @@ function DonorDetailModal({ supporterId, onClose }: { supporterId: number; onClo
               ) : (
                 <div className="space-y-2.5">
                   {detail.donations.map((d) => (
-                    <div key={d.donationId} className="bg-cream/60 rounded-xl px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div
+                      key={d.donationId}
+                      role={isAdmin ? 'button' : undefined}
+                      tabIndex={isAdmin ? 0 : undefined}
+                      onClick={() => isAdmin && setEditingDonation(d)}
+                      onKeyDown={e => {
+                        if (!isAdmin) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setEditingDonation(d);
+                        }
+                      }}
+                      className={`bg-cream/60 rounded-xl px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                        isAdmin ? 'cursor-pointer hover:bg-cream hover:ring-2 hover:ring-teal/25 transition-all' : ''
+                      }`}
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-gold/10 flex items-center justify-center flex-shrink-0">
                           <HeartHandshake size={14} className="text-gold" />
@@ -215,6 +395,11 @@ function DonorDetailModal({ supporterId, onClose }: { supporterId: number; onClo
                             {d.channelSource && <span className="text-xs text-dark/30">via {d.channelSource}</span>}
                           </div>
                           {d.notes && <p className="text-xs text-dark/50 italic mt-1">"{d.notes}"</p>}
+                          {isAdmin && (
+                            <p className="text-xs text-teal font-semibold mt-1.5 flex items-center gap-1">
+                              <Pencil size={12} /> Click to edit
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
@@ -246,6 +431,25 @@ function DonorDetailModal({ supporterId, onClose }: { supporterId: number; onClo
           </div>
         )}
       </div>
+
+      {editingDonation && detail && (
+        <EditDonationModal
+          donation={editingDonation}
+          supporterId={detail.supporterId}
+          onClose={() => setEditingDonation(null)}
+          onSaved={updated => {
+            setDetail(prev =>
+              prev
+                ? {
+                    ...prev,
+                    donations: prev.donations.map(x => (x.donationId === updated.donationId ? updated : x)),
+                  }
+                : null
+            );
+            onDonationsUpdated?.();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -494,7 +698,14 @@ export default function DonorsPage() {
 
       {/* Donor detail modal */}
       {selectedId !== null && (
-        <DonorDetailModal supporterId={selectedId} onClose={() => setSelectedId(null)} />
+        <DonorDetailModal
+          supporterId={selectedId}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedId(null)}
+          onDonationsUpdated={() => {
+            apiFetch('/api/supporters').then(r => (r.ok ? r.json() : [])).then(setSupporters);
+          }}
+        />
       )}
 
       {showAddModal && (
