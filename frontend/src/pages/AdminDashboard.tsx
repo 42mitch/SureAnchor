@@ -643,7 +643,7 @@ export default function AdminDashboard() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#00000008" />
                       <XAxis type="number" domain={[8, 12]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
                       <YAxis dataKey="platform" type="category" tick={{ fontSize: 11 }} width={72} />
-                      <Tooltip formatter={(v: number | undefined) => [`${(v ?? 0).toFixed(2)}%`, 'Engagement']} />
+                      <Tooltip formatter={(v) => [`${(Number(v) || 0).toFixed(2)}%`, 'Engagement']} />
                       <Bar dataKey="eng" radius={[0, 6, 6, 0]}>
                         {socialPlatformData.map((entry, i) => (
                           <Cell key={i} fill={PLATFORM_COLORS[entry.platform] || '#2D8F8A'} />
@@ -716,7 +716,7 @@ export default function AdminDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#00000008" />
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                   <YAxis tickFormatter={v => fmt(v)} tick={{ fontSize: 10 }} width={52} />
-                  <Tooltip formatter={(v: number | undefined) => [fmt(v ?? 0), 'Total donations']} />
+                  <Tooltip formatter={(v) => [fmt(Number(v) || 0), 'Total donations']} />
                   <Area type="monotone" dataKey="amount" stroke="#2D8F8A" strokeWidth={2} fill="url(#donGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -732,7 +732,7 @@ export default function AdminDashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#00000008" />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                     <YAxis tickFormatter={v => fmt(v)} tick={{ fontSize: 10 }} width={52} />
-                    <Tooltip formatter={(v: number | undefined) => [fmt(v ?? 0), 'Value']} />
+                    <Tooltip formatter={(v) => [fmt(Number(v) || 0), 'Value']} />
                     <Bar dataKey="value" fill="#1B3A5C" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
