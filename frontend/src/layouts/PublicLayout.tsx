@@ -40,7 +40,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                 to="/login"
                 className="btn-primary text-sm px-4 py-2"
               >
-                Staff Login
+                Login
               </Link>
             </div>
 
@@ -68,7 +68,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
               </a>
             ))}
             <Link to="/login" className="btn-primary text-sm text-center" onClick={() => setMobileOpen(false)}>
-              Staff Login
+              Login
             </Link>
           </div>
         )}

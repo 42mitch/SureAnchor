@@ -56,7 +56,7 @@ export default function LoginPage() {
             <div className="flex flex-col items-center gap-3">
               <AnchorLogo size="lg" variant="dark" />
               <p className="text-dark/40 text-xs text-center font-sans max-w-xs leading-relaxed">
-                Staff portal — authorized access only
+                Login — authorized access only
               </p>
             </div>
           </div>
