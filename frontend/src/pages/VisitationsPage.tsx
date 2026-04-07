@@ -4,6 +4,8 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 
 interface Visitation {
   visitationId: number;
@@ -259,6 +261,8 @@ export default function VisitationsPage() {
     v.visitType.toLowerCase().includes(search.toLowerCase())
   );
 
+  const visitsPag = useListPagination(filtered, [search]);
+
   return (
     <AdminLayout>
       <div className="space-y-5 animate-fade-in">
@@ -285,8 +289,16 @@ export default function VisitationsPage() {
           {loading ? (
             <div className="flex justify-center py-16"><div className="w-8 h-8 rounded-full border-4 border-teal border-t-transparent animate-spin" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-dark/40 text-sm">No visitations found.</div>
+            <>
+              <div className="py-16 text-center text-dark/40 text-sm">No visitations found.</div>
+              <div className="px-5 py-3 border-t border-dark/6 bg-cream/40">
+                <span className="text-xs text-dark/40 font-medium">
+                  {visitations.filter(v => v.safetyConcern).length} safety concern(s) across all visitations
+                </span>
+              </div>
+            </>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -297,9 +309,9 @@ export default function VisitationsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((visit, i) => (
+                  {visitsPag.pageItems.map((visit, i) => (
                     <tr key={visit.visitationId} onClick={() => setSelectedVisit(visit)}
-                      className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-teal/4 transition-colors group ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}>
+                      className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-teal/4 transition-colors group ${(visitsPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}>
                       <td className="px-5 py-4"><span className="font-mono text-xs font-bold text-dark/40">#{visit.visitationId}</span></td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
@@ -331,11 +343,23 @@ export default function VisitationsPage() {
                 </tbody>
               </table>
             </div>
+            <ListPaginationBar
+              page={visitsPag.page}
+              pageCount={visitsPag.pageCount}
+              pageSize={visitsPag.pageSize}
+              setPage={visitsPag.setPage}
+              setPageSize={visitsPag.setPageSize}
+              total={visitsPag.total}
+              startIndex={visitsPag.startIndex}
+              endIndex={visitsPag.endIndex}
+              trailing={
+                <span className="text-xs text-dark/30 shrink-0">
+                  {visitations.filter(v => v.safetyConcern).length} safety concern(s) flagged (all)
+                </span>
+              }
+            />
+            </>
           )}
-          <div className="px-5 py-3 border-t border-dark/6 bg-cream/40 flex items-center justify-between">
-            <span className="text-xs text-dark/40 font-medium">Showing {filtered.length} of {visitations.length} entries</span>
-            <span className="text-xs text-dark/30">{visitations.filter(v => v.safetyConcern).length} safety concern(s) flagged</span>
-          </div>
         </div>
       </div>
 

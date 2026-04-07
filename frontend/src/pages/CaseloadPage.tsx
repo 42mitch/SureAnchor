@@ -5,6 +5,8 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 
 interface Resident {
   residentId: number;
@@ -81,6 +83,8 @@ export default function CaseloadPage() {
     return matchSearch && matchStatus && matchRisk;
   });
 
+  const caseloadPag = useListPagination(filtered, [search, statusFilter, riskFilter]);
+
   return (
     <AdminLayout>
       <div className="space-y-5 animate-fade-in">
@@ -140,6 +144,7 @@ export default function CaseloadPage() {
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center text-dark/40 text-sm">No residents found.</div>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -150,11 +155,11 @@ export default function CaseloadPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, i) => (
+                  {caseloadPag.pageItems.map((r, i) => (
                     <tr
                       key={r.residentId}
                       onClick={() => setSelectedResident(r)}
-                      className={`border-b border-dark/5 cursor-pointer hover:bg-teal/4 transition-colors last:border-0 ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}
+                      className={`border-b border-dark/5 cursor-pointer hover:bg-teal/4 transition-colors last:border-0 ${(caseloadPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}
                     >
                       <td className="px-5 py-3.5"><span className="font-mono text-sm font-semibold text-navy">{r.caseNo}</span></td>
                       <td className="px-5 py-3.5"><span className="text-sm font-medium text-dark/70 bg-navy/6 px-2 py-0.5 rounded-md">{r.safehouse}</span></td>
@@ -180,6 +185,17 @@ export default function CaseloadPage() {
                 </tbody>
               </table>
             </div>
+            <ListPaginationBar
+              page={caseloadPag.page}
+              pageCount={caseloadPag.pageCount}
+              pageSize={caseloadPag.pageSize}
+              setPage={caseloadPag.setPage}
+              setPageSize={caseloadPag.setPageSize}
+              total={caseloadPag.total}
+              startIndex={caseloadPag.startIndex}
+              endIndex={caseloadPag.endIndex}
+            />
+            </>
           )}
         </div>
       </div>

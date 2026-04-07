@@ -145,7 +145,7 @@
 
 
 // NEW DASHBOARD DESIGN
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, HeartHandshake, Home, ChevronDown, ChevronUp,
@@ -158,6 +158,8 @@ import {
 } from 'recharts';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -325,11 +327,6 @@ export default function AdminDashboard() {
   });
   const categoryTotal = activeResidents.length || 1;
 
-  const recentAdmissions = [...residents]
-    .filter(r => r.dateAdmitted)
-    .sort((a, b) => (b.dateAdmitted! > a.dateAdmitted! ? 1 : -1))
-    .slice(0, 5);
-
   // ── Derived: Donations ──────────────────────────────────────────────────────
   const monetaryDonations = donations.filter(d => d.donationType === 'Monetary' && d.amount);
   const totalMonetary = monetaryDonations.reduce((s, d) => s + (d.amount || 0), 0);
@@ -376,29 +373,32 @@ export default function AdminDashboard() {
     { name: 'At Risk', value: atRiskCount, color: '#ea580c' },
   ];
 
-  // Activity feed from real data
-  const recentDonations = [...donations]
-    .sort((a, b) => b.donationDate.localeCompare(a.donationDate))
-    .slice(0, 3);
+  const activityItemsFull = useMemo(() => {
+    const admissionItems = [...residents]
+      .filter(r => r.dateAdmitted)
+      .sort((a, b) => (b.dateAdmitted! > a.dateAdmitted! ? 1 : -1))
+      .map(r => ({
+        id: `res-${r.residentId}`,
+        icon: UserPlus,
+        text: `New resident admitted to ${r.safehouse}`,
+        sub: `${r.caseNo} · ${r.category} · Risk: ${r.risk}`,
+        date: r.dateAdmitted!,
+      }));
 
-  const activityItems = [
-    ...recentAdmissions.slice(0, 2).map(r => ({
-      id: `res-${r.residentId}`,
-      icon: UserPlus,
-      text: `New resident admitted to ${r.safehouse}`,
-      sub: `${r.caseNo} · ${r.category} · Risk: ${r.risk}`,
-      date: r.dateAdmitted!,
-    })),
-    ...recentDonations.map(d => ({
-      id: `don-${d.donationId}`,
-      icon: Heart,
-      text: `${d.donationType} donation received`,
-      sub: `${d.donorName} · via ${d.channelSource || 'Direct'} · ${d.amount ? fmt(Number(d.amount)) : d.impactUnit}`,
-      date: d.donationDate,
-    })),
-  ]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 6);
+    const donationItems = [...donations]
+      .sort((a, b) => b.donationDate.localeCompare(a.donationDate))
+      .map(d => ({
+        id: `don-${d.donationId}`,
+        icon: Heart,
+        text: `${d.donationType} donation received`,
+        sub: `${d.donorName} · via ${d.channelSource || 'Direct'} · ${d.amount ? fmt(Number(d.amount)) : d.impactUnit}`,
+        date: d.donationDate,
+      }));
+
+    return [...admissionItems, ...donationItems].sort((a, b) => b.date.localeCompare(a.date));
+  }, [residents, donations]);
+
+  const actPag = useListPagination(activityItemsFull, [residents.length, donations.length]);
 
   // OKRs — sourced from real data analysis; wire to /api/dashboard/metrics when available
   const okrs = [
@@ -836,26 +836,41 @@ export default function AdminDashboard() {
                 </div>
               ))}
             </div>
+          ) : activityItemsFull.length === 0 ? (
+            <p className="text-sm text-dark/40 text-center py-6">No recent admissions or donations yet.</p>
           ) : (
-            <div className="space-y-4">
-              {activityItems.map(item => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.id} className="flex gap-4 items-start group">
-                    <div className="w-9 h-9 rounded-xl bg-navy/6 flex items-center justify-center flex-shrink-0 group-hover:bg-teal/10 transition-colors">
-                      <Icon size={16} className="text-navy/50 group-hover:text-teal transition-colors" strokeWidth={1.8} />
+            <>
+              <div className="space-y-4">
+                {actPag.pageItems.map(item => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.id} className="flex gap-4 items-start group">
+                      <div className="w-9 h-9 rounded-xl bg-navy/6 flex items-center justify-center flex-shrink-0 group-hover:bg-teal/10 transition-colors">
+                        <Icon size={16} className="text-navy/50 group-hover:text-teal transition-colors" strokeWidth={1.8} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-dark">{item.text}</p>
+                        <p className="text-xs text-dark/50 mt-0.5 truncate">{item.sub}</p>
+                      </div>
+                      <span className="text-xs text-dark/30 flex-shrink-0 pt-0.5">
+                        {new Date(item.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                      </span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-dark">{item.text}</p>
-                      <p className="text-xs text-dark/50 mt-0.5 truncate">{item.sub}</p>
-                    </div>
-                    <span className="text-xs text-dark/30 flex-shrink-0 pt-0.5">
-                      {new Date(item.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+              <ListPaginationBar
+                page={actPag.page}
+                pageCount={actPag.pageCount}
+                pageSize={actPag.pageSize}
+                setPage={actPag.setPage}
+                setPageSize={actPag.setPageSize}
+                total={actPag.total}
+                startIndex={actPag.startIndex}
+                endIndex={actPag.endIndex}
+                className="!border-t-0 border-x-0 border-b-0 mt-4 -mx-1"
+              />
+            </>
           )}
         </div>
 

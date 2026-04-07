@@ -4,6 +4,8 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 
 interface SessionNote {
   recordingId: number;
@@ -433,6 +435,8 @@ export default function ProcessRecordingPage() {
     n.sessionType.toLowerCase().includes(search.toLowerCase())
   );
 
+  const notesPag = useListPagination(filtered, [search]);
+
   return (
     <AdminLayout>
       <div className="space-y-5 animate-fade-in">
@@ -459,8 +463,14 @@ export default function ProcessRecordingPage() {
           {loading ? (
             <div className="flex justify-center py-16"><div className="w-8 h-8 rounded-full border-4 border-teal border-t-transparent animate-spin" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-dark/40 text-sm">No session notes found.</div>
+            <>
+              <div className="py-16 text-center text-dark/40 text-sm">No session notes found.</div>
+              <div className="px-5 py-3 border-t border-dark/6 bg-cream/40">
+                <span className="text-xs text-dark/30">All records encrypted · access logged</span>
+              </div>
+            </>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -471,9 +481,9 @@ export default function ProcessRecordingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((note, i) => (
+                  {notesPag.pageItems.map((note, i) => (
                     <tr key={note.recordingId} onClick={() => setSelectedNote(note)}
-                      className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-teal/4 transition-colors group ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}>
+                      className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-teal/4 transition-colors group ${(notesPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}>
                       <td className="px-5 py-4"><span className="font-mono text-xs font-bold text-dark/40">#{note.recordingId}</span></td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2.5">
@@ -512,11 +522,19 @@ export default function ProcessRecordingPage() {
                 </tbody>
               </table>
             </div>
+            <ListPaginationBar
+              page={notesPag.page}
+              pageCount={notesPag.pageCount}
+              pageSize={notesPag.pageSize}
+              setPage={notesPag.setPage}
+              setPageSize={notesPag.setPageSize}
+              total={notesPag.total}
+              startIndex={notesPag.startIndex}
+              endIndex={notesPag.endIndex}
+              trailing={<span className="text-xs text-dark/30 shrink-0">All records encrypted · access logged</span>}
+            />
+            </>
           )}
-          <div className="px-5 py-3 border-t border-dark/6 bg-cream/40 flex items-center justify-between">
-            <span className="text-xs text-dark/40 font-medium">Showing {filtered.length} of {notes.length} entries</span>
-            <span className="text-xs text-dark/30">All records encrypted · access logged</span>
-          </div>
         </div>
       </div>
 

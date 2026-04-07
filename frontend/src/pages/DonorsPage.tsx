@@ -7,6 +7,8 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import { useListPagination } from '../hooks/useListPagination';
+import ListPaginationBar from '../components/ListPaginationBar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -255,6 +257,9 @@ function DonorDetailModal({
       .finally(() => setLoading(false));
   }, [supporterId]);
 
+  const donationList = detail?.donations ?? [];
+  const donPag = useListPagination(donationList, [supporterId, donationList.length]);
+
   const totalGiven = detail?.donations.reduce((sum, d) => sum + (d.amount ?? d.estimatedValue ?? 0), 0) ?? 0;
 
   return (
@@ -357,7 +362,7 @@ function DonorDetailModal({
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {detail.donations.map((d) => (
+                  {donPag.pageItems.map((d) => (
                     <div
                       key={d.donationId}
                       role={isAdmin ? 'button' : undefined}
@@ -417,6 +422,17 @@ function DonorDetailModal({
                       </div>
                     </div>
                   ))}
+                  <ListPaginationBar
+                    page={donPag.page}
+                    pageCount={donPag.pageCount}
+                    pageSize={donPag.pageSize}
+                    setPage={donPag.setPage}
+                    setPageSize={donPag.setPageSize}
+                    total={donPag.total}
+                    startIndex={donPag.startIndex}
+                    endIndex={donPag.endIndex}
+                    className="rounded-xl border border-dark/8 !bg-cream/50"
+                  />
 
                   {/* Total row */}
                   {totalGiven > 0 && (
@@ -581,6 +597,8 @@ export default function DonorsPage() {
     s.email?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const donorsPag = useListPagination(filtered, [search]);
+
   const totalDonors = supporters.length;
   const activeDonors = supporters.filter(s => s.status === 'Active').length;
   const totalDonated = supporters.reduce((sum, s) => sum + s.totalDonated, 0);
@@ -634,6 +652,7 @@ export default function DonorsPage() {
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center text-dark/40 text-sm">No supporters found.</div>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -644,11 +663,11 @@ export default function DonorsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((s, i) => (
+                  {donorsPag.pageItems.map((s, i) => (
                     <tr
                       key={s.supporterId}
                       onClick={() => setSelectedId(s.supporterId)}
-                      className={`border-b border-dark/5 hover:bg-teal/5 transition-colors last:border-0 cursor-pointer ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}
+                      className={`border-b border-dark/5 hover:bg-teal/5 transition-colors last:border-0 cursor-pointer ${(donorsPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
@@ -690,8 +709,23 @@ export default function DonorsPage() {
                   ))}
                 </tbody>
               </table>
-              <p className="text-xs text-dark/30 text-center py-3">Click a row to view full donor profile and donation history</p>
             </div>
+            <ListPaginationBar
+              page={donorsPag.page}
+              pageCount={donorsPag.pageCount}
+              pageSize={donorsPag.pageSize}
+              setPage={donorsPag.setPage}
+              setPageSize={donorsPag.setPageSize}
+              total={donorsPag.total}
+              startIndex={donorsPag.startIndex}
+              endIndex={donorsPag.endIndex}
+              trailing={
+                <p className="text-xs text-dark/30 max-w-xs text-right">
+                  Click a row for profile & donation history
+                </p>
+              }
+            />
+            </>
           )}
         </div>
       </div>
