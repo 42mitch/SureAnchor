@@ -14,6 +14,17 @@ public class ResidentsController : ControllerBase
     private readonly ApplicationDbContext _db;
     public ResidentsController(ApplicationDbContext db) => _db = db;
 
+    // ── GET /api/residents/safehouses (for admin forms — list before {id} routes) ─
+    [HttpGet("safehouses")]
+    public async Task<IActionResult> GetSafehouses()
+    {
+        var list = await _db.Safehouses
+            .OrderBy(s => s.SafehouseCode)
+            .Select(s => new { s.SafehouseId, s.SafehouseCode, s.Name })
+            .ToListAsync();
+        return Ok(list);
+    }
+
     // ── GET /api/residents ────────────────────────────────────────────────────
     [HttpGet]
     public async Task<IActionResult> GetAll()
@@ -54,10 +65,12 @@ public class ResidentsController : ControllerBase
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var dto = new ResidentDetailDto(
             r.ResidentId,
+            r.SafehouseId,
             r.CaseControlNo,
             r.InternalCode,
             r.Safehouse.SafehouseCode,
             r.DateOfBirth.HasValue ? (today.DayNumber - r.DateOfBirth.Value.DayNumber) / 365 : 0,
+            r.DateOfBirth,
             r.CaseCategory ?? string.Empty,
             r.CurrentRiskLevel ?? string.Empty,
             r.InitialRiskLevel ?? string.Empty,
@@ -98,6 +111,7 @@ public class ResidentsController : ControllerBase
 
     // ── PUT /api/residents/{id} ───────────────────────────────────────────────
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] ResidentWriteDto dto)
     {
         var resident = await _db.Residents.FindAsync(id);
@@ -113,6 +127,8 @@ public class ResidentsController : ControllerBase
         resident.Religion = dto.Religion;
         resident.DateOfBirth = dto.DateOfBirth;
         resident.DateOfAdmission = dto.DateOfAdmission;
+        resident.ReintegrationType = dto.ReintegrationType;
+        resident.ReintegrationStatus = dto.ReintegrationStatus;
 
         await _db.SaveChangesAsync();
         return NoContent();
@@ -161,10 +177,12 @@ public record ResidentListDto(
 
 public record ResidentDetailDto(
     int ResidentId,
+    int SafehouseId,
     string CaseNo,
     string InternalCode,
     string Safehouse,
     int Age,
+    DateOnly? DateOfBirth,
     string Category,
     string Risk,
     string InitialRisk,
@@ -187,7 +205,9 @@ public record ResidentWriteDto(
     string? AssignedSocialWorker,
     string? Religion,
     DateOnly? DateOfBirth,
-    DateOnly? DateOfAdmission
+    DateOnly? DateOfAdmission,
+    string? ReintegrationType,
+    string? ReintegrationStatus
 );
 
 public record RiskLevelDto(string? RiskLevel);
