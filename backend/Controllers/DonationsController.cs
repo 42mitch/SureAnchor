@@ -100,8 +100,11 @@ public class DonationsController : ControllerBase
             // Auto-create a Supporter record if the donor doesn't have one yet
             if (appUser.SupporterId == null)
             {
+                // Manually assign next ID since the pre-existing table may not have IDENTITY set
+                var nextId = (_db.Supporters.Any() ? _db.Supporters.Max(s => s.SupporterId) : 0) + 1;
                 var supporter = new Supporter
                 {
+                    SupporterId        = nextId,
                     SupporterType      = "MonetaryDonor",
                     DisplayName        = appUser.DisplayName ?? appUser.Email ?? "Donor",
                     Email              = appUser.Email,
@@ -121,8 +124,10 @@ public class DonationsController : ControllerBase
             if (freshUser?.SupporterId == null)
                 return StatusCode(500, new { error = "Could not resolve donor supporter record." });
 
+            var nextDonationId = (_db.Donations.Any() ? _db.Donations.Max(d => d.DonationId) : 0) + 1;
             var donation = new Donation
             {
+                DonationId    = nextDonationId,
                 SupporterId   = freshUser.SupporterId.Value,
                 DonationType  = "Monetary",
                 DonationDate  = DateOnly.FromDateTime(DateTime.UtcNow),

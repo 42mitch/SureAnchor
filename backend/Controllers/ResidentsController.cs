@@ -78,6 +78,7 @@ public class ResidentsController : ControllerBase
     {
         var resident = new Resident
         {
+            ResidentId = (_db.Residents.Any() ? _db.Residents.Max(r => r.ResidentId) : 0) + 1,
             CaseControlNo = dto.CaseControlNo,
             InternalCode = dto.InternalCode,
             SafehouseId = dto.SafehouseId,

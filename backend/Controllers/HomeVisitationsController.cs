@@ -46,6 +46,7 @@ public class HomeVisitationsController : ControllerBase
     {
         var visit = new HomeVisitation
         {
+            VisitationId = (_db.HomeVisitations.Any() ? _db.HomeVisitations.Max(v => v.VisitationId) : 0) + 1,
             ResidentId = dto.ResidentId,
             VisitDate = DateOnly.Parse(dto.VisitDate),
             SocialWorker = dto.SocialWorker,
