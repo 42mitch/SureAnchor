@@ -114,6 +114,13 @@ function formatMonthYearLabel(recordDate: string): string {
   return dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
+/** API stores attendance/progress as ratios in [0, 1] (e.g. 0.7 → 70%). Values > 1 are already percents. */
+function educationRateToPercent(raw: number | null | undefined): number | null {
+  if (raw == null || Number.isNaN(raw)) return null;
+  if (raw >= 0 && raw <= 1) return raw * 100;
+  return raw;
+}
+
 interface EducationMonthRow {
   /** Full label for tooltips / summary */
   monthLabel: string;
@@ -146,8 +153,12 @@ function buildEducationMonthSeries(records: EducationRecord[]): EducationMonthRo
     const monthLabel = formatMonthYearLabel(anchor.recordDate);
     const shortMonth =
       dt?.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) ?? '—';
-    const attVals = group.map((g) => g.attendanceRate).filter((x): x is number => x != null);
-    const progVals = group.map((g) => g.progressPercent).filter((x): x is number => x != null);
+    const attVals = group
+      .map((g) => educationRateToPercent(g.attendanceRate))
+      .filter((x): x is number => x != null);
+    const progVals = group
+      .map((g) => educationRateToPercent(g.progressPercent))
+      .filter((x): x is number => x != null);
     const round1 = (n: number) => Math.round(n * 10) / 10;
     return {
       monthLabel,
@@ -281,10 +292,10 @@ export default function ResidentProfilePage() {
   const educationSummary = useMemo(() => {
     if (educationRecords.length === 0) return null;
     const allAtt = educationRecords
-      .map((r) => r.attendanceRate)
+      .map((r) => educationRateToPercent(r.attendanceRate))
       .filter((x): x is number => x != null);
     const allProg = educationRecords
-      .map((r) => r.progressPercent)
+      .map((r) => educationRateToPercent(r.progressPercent))
       .filter((x): x is number => x != null);
     const round1 = (n: number) => Math.round(n * 10) / 10;
     const latest = [...educationRecords].sort(
