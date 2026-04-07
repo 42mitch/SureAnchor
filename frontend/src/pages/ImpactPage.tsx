@@ -145,7 +145,7 @@ export default function ImpactPage() {
           <Heart size={28} className="text-white/80 mb-3" strokeWidth={1.5} />
           <h3 className="font-display text-2xl font-bold mb-3">Your donations make this possible</h3>
           <p className="text-white/75 text-sm leading-relaxed mb-6">
-            ₱5,000 provides one month of counseling for a survivor. ₱15,000 covers educational materials for a safe house for a term. Every peso anchors a young woman&apos;s hope.
+            Every donation counts. Whether large or small, your gift helps shelter, counsel, and walk alongside young women on their journey. You can help be an anchor for someone when they need it most.
           </p>
           <a
             href="/login"
