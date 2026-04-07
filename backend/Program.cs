@@ -107,7 +107,7 @@ app.Use(async (ctx, next) =>
         ctx.Response.Headers["Access-Control-Allow-Origin"]      = origin;
         ctx.Response.Headers["Access-Control-Allow-Credentials"] = "true";
         ctx.Response.Headers["Access-Control-Allow-Headers"]     = "Content-Type, Authorization";
-        ctx.Response.Headers["Access-Control-Allow-Methods"]     = "GET, POST, PUT, DELETE, OPTIONS";
+        ctx.Response.Headers["Access-Control-Allow-Methods"]     = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
         ctx.Response.Headers["Vary"]                             = "Origin";
     }
     if (ctx.Request.Method == "OPTIONS")
