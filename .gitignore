@@ -72,3 +72,10 @@ __pycache__/
 venv/
 *.pkl
 *.joblib
+
+# Data uploads
+backend/Data/csv/
+backend/Data/*.csv
+
+# Python env
+backend/Data/.env
