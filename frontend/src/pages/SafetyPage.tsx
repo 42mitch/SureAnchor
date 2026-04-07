@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, AlertTriangle, CheckCircle, FileText,
-  ChevronRight, User, ChevronDown, ClipboardX,
+  ChevronRight, User, ChevronDown, ClipboardX, X,
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
@@ -76,35 +76,119 @@ const incidentTypeLabel: Record<string, string> = {
   PropertyDamage: 'Property Damage',
 };
 
-// ── Collapse Card wrapper ─────────────────────────────────────────────────────
-// Animates height → 0 + fade-out so surrounding cards shift up smoothly.
+// ── CollapseCard ──────────────────────────────────────────────────────────────
+// Captures real pixel height via useLayoutEffect (before paint) so the
+// max-height transition has a concrete start value and cards shift up smoothly.
 
-function CollapseCard({ id, removing, children }: {
-  id: number;
-  removing: boolean;
-  children: React.ReactNode;
-}) {
+function CollapseCard({ removing, children }: { removing: boolean; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number | undefined>(undefined);
+  const [naturalH, setNaturalH] = useState<string>('none');
 
-  // Capture natural height once mounted
-  useEffect(() => {
-    if (ref.current) setHeight(ref.current.scrollHeight);
+  useLayoutEffect(() => {
+    if (ref.current) setNaturalH(ref.current.scrollHeight + 'px');
   }, []);
-
-  // When removing starts, collapse from current height → 0
-  useEffect(() => {
-    if (removing && ref.current) setHeight(0);
-  }, [removing]);
 
   return (
     <div
-      key={id}
       ref={ref}
-      style={{ maxHeight: height !== undefined ? height : undefined, opacity: removing ? 0 : 1 }}
-      className="overflow-hidden transition-all duration-300 ease-in-out"
+      style={{
+        maxHeight: removing ? '0px' : naturalH,
+        opacity: removing ? 0 : 1,
+        overflow: 'hidden',
+        transition: 'max-height 0.35s ease, opacity 0.25s ease',
+      }}
     >
       <div className="pb-3">{children}</div>
+    </div>
+  );
+}
+
+// ── Incident Detail Modal ─────────────────────────────────────────────────────
+
+function IncidentDetailModal({ incident, onClose, onResolve, onViewProfile, resolving }: {
+  incident: Incident;
+  onClose: () => void;
+  onResolve: () => void;
+  onViewProfile: () => void;
+  resolving: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
+
+        {/* Header */}
+        <div className="sticky top-0 bg-white rounded-t-3xl px-6 py-5 border-b border-dark/8 flex items-start justify-between z-10">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className="font-mono text-xs font-bold bg-navy/8 text-navy px-2.5 py-1 rounded-lg">
+                Resident {incident.residentCode}
+              </span>
+              {severityBadge(incident.severity)}
+              {incident.followUpRequired && (
+                <span className="bg-orange-50 border border-orange-200 text-orange-600 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                  Follow-up required
+                </span>
+              )}
+            </div>
+            <p className="text-dark/40 text-xs font-medium mt-1">
+              {incidentTypeLabel[incident.incidentType] ?? incident.incidentType} · {incident.incidentDate} · #{incident.incidentId}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-dark/35 hover:text-dark hover:bg-dark/6 rounded-lg p-1.5 transition-colors flex-shrink-0 ml-3">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 space-y-5">
+          {incident.reportedBy && (
+            <div className="flex items-center gap-3 bg-orange-50/60 rounded-2xl px-4 py-3.5">
+              <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 text-xs font-bold flex-shrink-0">
+                {incident.reportedBy.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              </div>
+              <div>
+                <p className="text-xs text-dark/40 font-medium">Reported By</p>
+                <p className="text-sm font-semibold text-navy">{incident.reportedBy}</p>
+              </div>
+            </div>
+          )}
+
+          {incident.description && (
+            <div>
+              <p className="text-xs font-semibold text-dark/40 uppercase tracking-widest mb-2">Description</p>
+              <div className="bg-cream rounded-2xl px-5 py-4 border-l-4 border-orange-300">
+                <p className="text-sm text-dark/75 leading-relaxed">{incident.description}</p>
+              </div>
+            </div>
+          )}
+
+          {incident.responseTaken && (
+            <div>
+              <p className="text-xs font-semibold text-dark/40 uppercase tracking-widest mb-2">Response Taken</p>
+              <div className="flex items-start gap-3 bg-teal/6 rounded-2xl px-4 py-3.5 border border-teal/15">
+                <div className="w-1.5 h-1.5 rounded-full bg-teal mt-1.5 flex-shrink-0" />
+                <p className="text-sm font-medium text-dark/70">{incident.responseTaken}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <button onClick={onViewProfile} className="flex-1 py-3 rounded-xl border border-dark/12 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
+              View Profile
+            </button>
+            <button
+              onClick={() => { onResolve(); onClose(); }}
+              disabled={resolving}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-semibold hover:bg-green-100 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle size={15} />
+              {resolving ? 'Resolving…' : 'Resolve'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -112,14 +196,11 @@ function CollapseCard({ id, removing, children }: {
 // ── Flag Card ─────────────────────────────────────────────────────────────────
 
 function FlagCard({ flag, resolving, removing, onResolve, onViewProfile }: {
-  flag: Flag;
-  resolving: boolean;
-  removing: boolean;
-  onResolve: () => void;
-  onViewProfile: () => void;
+  flag: Flag; resolving: boolean; removing: boolean;
+  onResolve: () => void; onViewProfile: () => void;
 }) {
   return (
-    <CollapseCard id={flag.recordingId} removing={removing}>
+    <CollapseCard removing={removing}>
       <div className="card border border-red-100 bg-white">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 min-w-0">
@@ -168,16 +249,16 @@ function FlagCard({ flag, resolving, removing, onResolve, onViewProfile }: {
 
 // ── Incident Card ─────────────────────────────────────────────────────────────
 
-function IncidentCard({ incident, resolving, removing, onResolve, onViewProfile }: {
-  incident: Incident;
-  resolving: boolean;
-  removing: boolean;
-  onResolve: () => void;
-  onViewProfile: () => void;
+function IncidentCard({ incident, resolving, removing, onResolve, onViewProfile, onClick }: {
+  incident: Incident; resolving: boolean; removing: boolean;
+  onResolve: () => void; onViewProfile: () => void; onClick: () => void;
 }) {
   return (
-    <CollapseCard id={incident.incidentId} removing={removing}>
-      <div className="card border border-orange-100 bg-white">
+    <CollapseCard removing={removing}>
+      <div
+        className="card border border-orange-100 bg-white cursor-pointer hover:border-orange-200 hover:shadow-sm transition-all group"
+        onClick={onClick}
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -206,17 +287,21 @@ function IncidentCard({ incident, resolving, removing, onResolve, onViewProfile 
             </div>
           </div>
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
-            <button onClick={onViewProfile} className="text-xs text-navy/60 hover:text-navy font-semibold underline underline-offset-2 whitespace-nowrap">
+            <button
+              onClick={e => { e.stopPropagation(); onViewProfile(); }}
+              className="text-xs text-navy/60 hover:text-navy font-semibold underline underline-offset-2 whitespace-nowrap"
+            >
               View Profile
             </button>
             <button
-              onClick={onResolve}
+              onClick={e => { e.stopPropagation(); onResolve(); }}
               disabled={resolving || removing}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors disabled:opacity-50 whitespace-nowrap"
             >
               <CheckCircle size={13} />
               {resolving ? 'Resolving…' : 'Resolve'}
             </button>
+            <ChevronRight size={14} className="text-dark/20 group-hover:text-orange-400 group-hover:translate-x-0.5 transition-all mt-1" />
           </div>
         </div>
       </div>
@@ -236,13 +321,14 @@ export default function SafetyPage() {
   const [criticalResidents, setCriticalResidents] = useState<CriticalResident[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Track which items are mid-animation (fading + collapsing)
   const [removingFlags, setRemovingFlags] = useState<Set<number>>(new Set());
   const [removingIncidents, setRemovingIncidents] = useState<Set<number>>(new Set());
   const [resolvingFlags, setResolvingFlags] = useState<Set<number>>(new Set());
   const [resolvingIncidents, setResolvingIncidents] = useState<Set<number>>(new Set());
 
   const [flagsVisible, setFlagsVisible] = useState(INITIAL_SHOW);
+  const [incidentsVisible, setIncidentsVisible] = useState(INITIAL_SHOW);
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -256,16 +342,26 @@ export default function SafetyPage() {
     }).finally(() => setLoading(false));
   }, []);
 
+  function startRemoving<T>(
+    id: number,
+    setRemoving: React.Dispatch<React.SetStateAction<Set<number>>>,
+    setResolving: React.Dispatch<React.SetStateAction<Set<number>>>,
+    setItems: React.Dispatch<React.SetStateAction<T[]>>,
+    idKey: keyof T,
+  ) {
+    setRemoving(s => new Set(s).add(id));
+    setTimeout(() => {
+      setItems(prev => prev.filter(item => (item[idKey] as unknown as number) !== id));
+      setRemoving(s => { const n = new Set(s); n.delete(id); return n; });
+      setResolving(s => { const n = new Set(s); n.delete(id); return n; });
+    }, 380);
+  }
+
   async function resolveFlag(flag: Flag) {
     setResolvingFlags(s => new Set(s).add(flag.recordingId));
     const res = await apiFetch(`/api/process-recordings/${flag.recordingId}/resolve`, { method: 'PATCH' });
     if (res.ok) {
-      setRemovingFlags(s => new Set(s).add(flag.recordingId));
-      setTimeout(() => {
-        setFlags(prev => prev.filter(f => f.recordingId !== flag.recordingId));
-        setRemovingFlags(s => { const n = new Set(s); n.delete(flag.recordingId); return n; });
-        setResolvingFlags(s => { const n = new Set(s); n.delete(flag.recordingId); return n; });
-      }, 350);
+      startRemoving(flag.recordingId, setRemovingFlags, setResolvingFlags, setFlags, 'recordingId');
     } else {
       setResolvingFlags(s => { const n = new Set(s); n.delete(flag.recordingId); return n; });
     }
@@ -275,12 +371,7 @@ export default function SafetyPage() {
     setResolvingIncidents(s => new Set(s).add(incident.incidentId));
     const res = await apiFetch(`/api/incident-reports/${incident.incidentId}/resolve`, { method: 'PATCH' });
     if (res.ok) {
-      setRemovingIncidents(s => new Set(s).add(incident.incidentId));
-      setTimeout(() => {
-        setIncidents(prev => prev.filter(i => i.incidentId !== incident.incidentId));
-        setRemovingIncidents(s => { const n = new Set(s); n.delete(incident.incidentId); return n; });
-        setResolvingIncidents(s => { const n = new Set(s); n.delete(incident.incidentId); return n; });
-      }, 350);
+      startRemoving(incident.incidentId, setRemovingIncidents, setResolvingIncidents, setIncidents, 'incidentId');
     } else {
       setResolvingIncidents(s => { const n = new Set(s); n.delete(incident.incidentId); return n; });
     }
@@ -288,7 +379,9 @@ export default function SafetyPage() {
 
   const totalAlerts = flags.length + incidents.length;
   const visibleFlags = flags.slice(0, flagsVisible);
+  const visibleIncidents = incidents.slice(0, incidentsVisible);
   const hasMoreFlags = flags.length > flagsVisible;
+  const hasMoreIncidents = incidents.length > incidentsVisible;
 
   return (
     <AdminLayout>
@@ -317,7 +410,7 @@ export default function SafetyPage() {
           </div>
         ) : (
           <>
-            {/* ── Critical Residents (full width) ───────────────────────── */}
+            {/* ── Critical Residents ─────────────────────────────────────── */}
             <section>
               <div className="flex items-center gap-2 mb-3">
                 <ShieldAlert size={16} className="text-orange-500" />
@@ -326,7 +419,6 @@ export default function SafetyPage() {
                   <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">{criticalResidents.length}</span>
                 )}
               </div>
-
               {criticalResidents.length === 0 ? (
                 <div className="card flex flex-col items-center py-10 text-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -348,11 +440,8 @@ export default function SafetyPage() {
                       </thead>
                       <tbody>
                         {criticalResidents.map((r, i) => (
-                          <tr
-                            key={r.residentId}
-                            onClick={() => navigate(`/admin/resident/${r.residentId}`)}
-                            className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-red-50/40 transition-colors group ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}
-                          >
+                          <tr key={r.residentId} onClick={() => navigate(`/admin/resident/${r.residentId}`)}
+                            className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-red-50/40 transition-colors group ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}>
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-2.5">
                                 <div className="w-8 h-8 rounded-full bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0">
@@ -390,7 +479,6 @@ export default function SafetyPage() {
                     <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{flags.length}</span>
                   )}
                 </div>
-
                 {flags.length === 0 ? (
                   <div className="card flex flex-col items-center py-10 text-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -411,7 +499,6 @@ export default function SafetyPage() {
                         onViewProfile={() => navigate(`/admin/resident/${flag.residentId}`)}
                       />
                     ))}
-
                     {hasMoreFlags && (
                       <button
                         onClick={() => setFlagsVisible(c => c + LOAD_MORE_COUNT)}
@@ -434,7 +521,6 @@ export default function SafetyPage() {
                     <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">{incidents.length}</span>
                   )}
                 </div>
-
                 {incidents.length === 0 ? (
                   <div className="card flex flex-col items-center py-10 text-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -445,7 +531,7 @@ export default function SafetyPage() {
                   </div>
                 ) : (
                   <div>
-                    {incidents.map(incident => (
+                    {visibleIncidents.map(incident => (
                       <IncidentCard
                         key={incident.incidentId}
                         incident={incident}
@@ -453,8 +539,18 @@ export default function SafetyPage() {
                         removing={removingIncidents.has(incident.incidentId)}
                         onResolve={() => resolveIncident(incident)}
                         onViewProfile={() => navigate(`/admin/resident/${incident.residentId}`)}
+                        onClick={() => setSelectedIncident(incident)}
                       />
                     ))}
+                    {hasMoreIncidents && (
+                      <button
+                        onClick={() => setIncidentsVisible(c => c + LOAD_MORE_COUNT)}
+                        className="w-full py-3 rounded-xl border border-dark/12 text-dark/50 text-sm font-semibold hover:bg-cream hover:text-dark/70 transition-colors flex items-center justify-center gap-2 mt-1"
+                      >
+                        <ChevronDown size={15} />
+                        Load more ({incidents.length - incidentsVisible} remaining)
+                      </button>
+                    )}
                   </div>
                 )}
               </section>
@@ -462,6 +558,17 @@ export default function SafetyPage() {
           </>
         )}
       </div>
+
+      {/* Incident Detail Modal */}
+      {selectedIncident && (
+        <IncidentDetailModal
+          incident={selectedIncident}
+          onClose={() => setSelectedIncident(null)}
+          onResolve={() => resolveIncident(selectedIncident)}
+          onViewProfile={() => { setSelectedIncident(null); navigate(`/admin/resident/${selectedIncident.residentId}`); }}
+          resolving={resolvingIncidents.has(selectedIncident.incidentId)}
+        />
+      )}
     </AdminLayout>
   );
 }
