@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, User, FileText, Home, Shield, Calendar,
   AlertTriangle, CheckCircle, Clock, ChevronRight, Activity,
-  BookOpen, Heart, MapPin, Hash, Pencil, Trash2
+  BookOpen, Heart, MapPin, Hash, Pencil, Trash2, GraduationCap
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -69,6 +69,19 @@ interface HomeVisitation {
   safetyConcern: boolean;
   followUpNeeded: boolean;
   outcome: string;
+}
+
+interface EducationRecord {
+  educationRecordId: number;
+  residentId: number;
+  recordDate: string;
+  educationLevel: string;
+  schoolName: string;
+  enrollmentStatus: string;
+  attendanceRate: number | null;
+  progressPercent: number | null;
+  completionStatus: string;
+  notes: string;
 }
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
@@ -137,6 +150,7 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: User },
   { id: 'sessions', label: 'Counseling Sessions', icon: FileText },
   { id: 'visitations', label: 'Home Visitations', icon: Home },
+  { id: 'education', label: 'Education', icon: GraduationCap },
 ];
 
 function toSessionNoteRow(n: ProcessRecording): SessionNoteRow {
@@ -166,6 +180,7 @@ export default function ResidentProfilePage() {
   const [resident, setResident] = useState<ResidentDetail | null>(null);
   const [sessions, setSessions] = useState<ProcessRecording[]>([]);
   const [visitations, setVisitations] = useState<HomeVisitation[]>([]);
+  const [educationRecords, setEducationRecords] = useState<EducationRecord[]>([]);
   const [safehouses, setSafehouses] = useState<SafehouseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
