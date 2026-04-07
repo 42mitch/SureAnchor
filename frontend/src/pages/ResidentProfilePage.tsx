@@ -196,6 +196,7 @@ export default function ResidentProfilePage() {
 
   const sessPag = useListPagination(sessions, [id, sessions.length]);
   const visitPag = useListPagination(visitations, [id, visitations.length]);
+  const eduPag = useListPagination(educationRecords, [id, educationRecords.length]);
 
   function reloadResident() {
     if (!id) return;
@@ -211,11 +212,13 @@ export default function ResidentProfilePage() {
       apiFetch(`/api/residents/${id}`).then(r => r.ok ? r.json() : null),
       apiFetch(`/api/process-recordings?residentId=${id}`).then(r => r.ok ? r.json() : []),
       apiFetch(`/api/home-visitations?residentId=${id}`).then(r => r.ok ? r.json() : []),
-    ]).then(([res, recs, visits]) => {
+      apiFetch(`/api/education-records?residentId=${id}`).then(r => r.ok ? r.json() : []),
+    ]).then(([res, recs, visits, edu]) => {
       if (!res) { setNotFound(true); return; }
       setResident(res);
       setSessions(recs);
       setVisitations(visits);
+      setEducationRecords(edu);
     }).finally(() => setLoading(false));
   }, [id]);
 
@@ -356,6 +359,10 @@ export default function ResidentProfilePage() {
                 <div className="font-display text-2xl font-bold text-teal-light">{visitations.length}</div>
                 <div className="text-xs text-white/60">Home Visits</div>
               </div>
+              <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
+                <div className="font-display text-2xl font-bold text-white/90">{educationRecords.length}</div>
+                <div className="text-xs text-white/60">Education</div>
+              </div>
             </div>
           </div>
         </div>
@@ -457,6 +464,11 @@ export default function ResidentProfilePage() {
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-dark/50 font-medium">Home Visitations</span>
                     <span className="font-bold text-navy text-sm">{visitations.length}</span>
+                  </div>
+                  <div className="h-px bg-dark/6" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-dark/50 font-medium">Education Records</span>
+                    <span className="font-bold text-navy text-sm">{educationRecords.length}</span>
                   </div>
                   <div className="h-px bg-dark/6" />
                   <div className="flex justify-between items-center">
@@ -676,6 +688,78 @@ export default function ResidentProfilePage() {
                 startIndex={visitPag.startIndex}
                 endIndex={visitPag.endIndex}
               />
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── EDUCATION TAB ─────────────────────────────────────────────────── */}
+        {activeTab === 'education' && (
+          <div className="space-y-4">
+            {educationRecords.length === 0 ? (
+              <div className="card text-center py-16">
+                <GraduationCap size={40} className="text-dark/20 mx-auto mb-3" />
+                <p className="font-display text-lg font-semibold text-navy mb-1">No Education Records</p>
+                <p className="text-dark/45 text-sm">Education records for this resident will appear here.</p>
+              </div>
+            ) : (
+              <>
+                {eduPag.pageItems.map((rec) => (
+                  <div key={rec.educationRecordId} className="card hover:shadow-card-hover transition-all duration-200">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-navy/8 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <GraduationCap size={18} className="text-navy" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-navy">{rec.schoolName || '—'}</p>
+                          <p className="text-xs text-dark/40 font-medium mt-0.5">{rec.recordDate}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal/10 text-teal-dark self-start">
+                        {rec.enrollmentStatus || '—'}
+                      </span>
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Level</p>
+                        <p className="font-medium text-dark">{rec.educationLevel || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Completion</p>
+                        <p className="font-medium text-dark">{rec.completionStatus || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Attendance</p>
+                        <p className="font-medium text-dark">
+                          {rec.attendanceRate != null ? `${rec.attendanceRate}%` : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Progress</p>
+                        <p className="font-medium text-dark">
+                          {rec.progressPercent != null ? `${rec.progressPercent}%` : '—'}
+                        </p>
+                      </div>
+                    </div>
+                    {rec.notes && (
+                      <div className="mt-4 pt-4 border-t border-dark/6">
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Notes</p>
+                        <p className="text-sm text-dark/70 leading-relaxed">{rec.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <ListPaginationBar
+                  page={eduPag.page}
+                  pageCount={eduPag.pageCount}
+                  pageSize={eduPag.pageSize}
+                  setPage={eduPag.setPage}
+                  setPageSize={eduPag.setPageSize}
+                  total={eduPag.total}
+                  startIndex={eduPag.startIndex}
+                  endIndex={eduPag.endIndex}
+                />
               </>
             )}
           </div>
