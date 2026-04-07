@@ -1,10 +1,49 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowRight } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
+import { useAuth } from '../context/AuthContext';
+
+function redirectForRoles(roles: string[]): string {
+  if (roles.includes('Admin') || roles.includes('Staff')) return '/admin';
+  if (roles.includes('Donor')) return '/donor';
+  return '/';
+}
 
 export default function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Use the "from" location if present, otherwise decide by role
+  const fromPath = (location.state as { from?: { pathname: string } })?.from?.pathname;
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const result = await login(email, password);
+    setLoading(false);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      // result.user is set in AuthContext after login; get it via the context
+      // We redirect after login by reading the roles from the returned user
+      // AuthContext.login returns {} on success so we need to read user from context
+      // Use fromPath if available, otherwise use role-based default
+      if (fromPath) {
+        navigate(fromPath, { replace: true });
+      } else {
+        // Roles are in the auth context after login — navigate via result
+        navigate(result.destination ?? '/admin', { replace: true });
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-navy via-navy-light to-teal-dark flex items-center justify-center p-4">
@@ -34,7 +73,14 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-dark/10" />
           </div>
 
-          <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+          {/* Error message */}
+          {error && (
+            <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
             {/* Email */}
             <div>
               <label className="block text-sm font-semibold text-dark mb-2">Email Address</label>
@@ -44,7 +90,9 @@ export default function LoginPage() {
                 </div>
                 <input
                   type="email"
-                  defaultValue="admin@sureanchor.org"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm placeholder-dark/30 transition-all"
                   placeholder="you@sureanchor.org"
                 />
@@ -53,17 +101,16 @@ export default function LoginPage() {
 
             {/* Password */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-semibold text-dark">Password</label>
-                <a href="#" className="text-xs text-teal hover:text-teal-dark font-medium">Forgot password?</a>
-              </div>
+              <label className="block text-sm font-semibold text-dark mb-2">Password</label>
               <div className="relative">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-dark/30">
                   <Lock size={18} />
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  defaultValue="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
                   className="w-full pl-11 pr-12 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm placeholder-dark/30 transition-all"
                   placeholder="••••••••"
                 />
@@ -77,27 +124,21 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember me */}
-            <div className="flex items-center gap-2.5">
-              <input
-                type="checkbox"
-                id="remember"
-                defaultChecked
-                className="w-4 h-4 rounded border-dark/20 text-teal accent-teal"
-              />
-              <label htmlFor="remember" className="text-sm text-dark/60">
-                Keep me signed in
-              </label>
-            </div>
-
             {/* Submit */}
-            <Link
-              to="/admin"
-              className="flex items-center justify-center gap-2 w-full bg-navy text-white font-semibold py-3.5 rounded-xl hover:bg-navy-light transition-all duration-200 shadow-sm hover:shadow-md text-sm mt-2"
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center justify-center gap-2 w-full bg-navy text-white font-semibold py-3.5 rounded-xl hover:bg-navy-light transition-all duration-200 shadow-sm hover:shadow-md text-sm mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Sign In to Dashboard
-              <ArrowRight size={17} />
-            </Link>
+              {loading ? (
+                <span className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <>
+                  Sign In
+                  <ArrowRight size={17} />
+                </>
+              )}
+            </button>
           </form>
 
           {/* Privacy */}
