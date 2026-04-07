@@ -93,6 +93,40 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
+// Must be first: manually stamp CORS headers so they survive even on 500 responses.
+// (ASP.NET Core's built-in CORS middleware strips headers when an unhandled exception resets the response.)
+string[] corsOrigins = [
+    "http://localhost:5173",
+    "https://zealous-tree-029394910.6.azurestaticapps.net"
+];
+app.Use(async (ctx, next) =>
+{
+    var origin = ctx.Request.Headers.Origin.ToString();
+    if (corsOrigins.Contains(origin))
+    {
+        ctx.Response.Headers["Access-Control-Allow-Origin"]      = origin;
+        ctx.Response.Headers["Access-Control-Allow-Credentials"] = "true";
+        ctx.Response.Headers["Access-Control-Allow-Headers"]     = "Content-Type, Authorization";
+        ctx.Response.Headers["Access-Control-Allow-Methods"]     = "GET, POST, PUT, DELETE, OPTIONS";
+        ctx.Response.Headers["Vary"]                             = "Origin";
+    }
+    if (ctx.Request.Method == "OPTIONS")
+    {
+        ctx.Response.StatusCode = 204;
+        return;
+    }
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        ctx.Response.StatusCode      = 500;
+        ctx.Response.ContentType     = "application/json";
+        await ctx.Response.WriteAsJsonAsync(new { error = ex.Message, detail = ex.InnerException?.Message });
+    }
+});
+
 app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
 app.UseAuthentication();
