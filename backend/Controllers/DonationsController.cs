@@ -180,7 +180,7 @@ public class DonationsController : ControllerBase
 
     // ── PUT /api/donations/{id} ───────────────────────────────────────────────
     [HttpPut("{id:int}")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] DonationWriteDto dto)
     {
         var donation = await _db.Donations.FindAsync(id);
