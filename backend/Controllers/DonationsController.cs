@@ -92,44 +92,61 @@ public class DonationsController : ControllerBase
     [Authorize(Roles = "Donor")]
     public async Task<IActionResult> Give([FromBody] DonorGiveDto dto)
     {
-        var appUser = await _userManager.GetUserAsync(User);
-        if (appUser == null) return Unauthorized();
-
-        // Auto-create a Supporter record if the donor doesn't have one yet
-        if (appUser.SupporterId == null)
+        try
         {
-            var supporter = new Supporter
+            var appUser = await _userManager.GetUserAsync(User);
+            if (appUser == null) return Unauthorized();
+
+            // Auto-create a Supporter record if the donor doesn't have one yet
+            if (appUser.SupporterId == null)
             {
-                SupporterType = "MonetaryDonor",
-                DisplayName   = appUser.DisplayName ?? appUser.Email!,
-                Email         = appUser.Email,
-                Status        = "Active",
-                CreatedAt     = DateTime.UtcNow,
-                FirstDonationDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                AcquisitionChannel = "Website",
-            };
-            _db.Supporters.Add(supporter);
-            await _db.SaveChangesAsync();
-            appUser.SupporterId = supporter.SupporterId;
-            await _userManager.UpdateAsync(appUser);
-        }
+                var supporter = new Supporter
+                {
+                    SupporterType      = "MonetaryDonor",
+                    DisplayName        = appUser.DisplayName ?? appUser.Email ?? "Donor",
+                    Email              = appUser.Email,
+                    Status             = "Active",
+                    CreatedAt          = DateTime.UtcNow,
+                    FirstDonationDate  = DateOnly.FromDateTime(DateTime.UtcNow),
+                    AcquisitionChannel = "Website",
+                };
+                _db.Supporters.Add(supporter);
+                await _db.SaveChangesAsync();
+                appUser.SupporterId = supporter.SupporterId;
+                await _userManager.UpdateAsync(appUser);
+            }
 
-        var donation = new Donation
+            // Reload user to ensure SupporterId is current
+            var freshUser = await _userManager.GetUserAsync(User);
+            if (freshUser?.SupporterId == null)
+                return StatusCode(500, new { error = "Could not resolve donor supporter record." });
+
+            var donation = new Donation
+            {
+                SupporterId   = freshUser.SupporterId.Value,
+                DonationType  = "Monetary",
+                DonationDate  = DateOnly.FromDateTime(DateTime.UtcNow),
+                IsRecurring   = false,
+                CampaignName  = string.IsNullOrWhiteSpace(dto.CampaignName) ? null : dto.CampaignName,
+                ChannelSource = "Direct",
+                CurrencyCode  = "PHP",
+                Amount        = dto.Amount,
+                ImpactUnit    = "pesos",
+                Notes         = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes,
+            };
+            _db.Donations.Add(donation);
+            await _db.SaveChangesAsync();
+            return Ok(new { donation.DonationId, message = "Thank you for your donation!" });
+        }
+        catch (Exception ex)
         {
-            SupporterId  = appUser.SupporterId!.Value,
-            DonationType = "Monetary",
-            DonationDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            IsRecurring  = false,
-            CampaignName = dto.CampaignName,
-            ChannelSource = "Direct",
-            CurrencyCode = "PHP",
-            Amount       = dto.Amount,
-            ImpactUnit   = "pesos",
-            Notes        = dto.Notes,
-        };
-        _db.Donations.Add(donation);
-        await _db.SaveChangesAsync();
-        return Ok(new { donation.DonationId, message = "Thank you for your donation!" });
+            return StatusCode(500, new
+            {
+                error  = ex.Message,
+                detail = ex.InnerException?.Message,
+                stage  = "give-endpoint"
+            });
+        }
     }
 
     // ── POST /api/donations ───────────────────────────────────────────────────
