@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, Home, HeartHandshake,
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../api';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -22,6 +23,7 @@ const navItems = [
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeAlertsCount, setActiveAlertsCount] = useState<number>(0);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -30,6 +32,34 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     await logout();
     navigate('/login', { replace: true });
   }
+
+  // Fetch active alerts count for Safety Monitor badge
+  useEffect(() => {
+    async function fetchAlertsCount() {
+      try {
+        const [recordingsRes, incidentsRes] = await Promise.all([
+          apiFetch('/api/process-recordings'),
+          apiFetch('/api/incident-reports?resolved=false'),
+        ]);
+
+        if (recordingsRes.ok && incidentsRes.ok) {
+          const recordings = await recordingsRes.json();
+          const incidents = await incidentsRes.json();
+          const flaggedRecordings = recordings.filter((r: any) => r.concernsFlagged);
+          setActiveAlertsCount(flaggedRecordings.length + incidents.length);
+        }
+      } catch (error) {
+        console.error('Failed to fetch alerts count:', error);
+      }
+    }
+
+    if (user?.roles.includes('Admin')) {
+      fetchAlertsCount();
+      // Refresh count every 60 seconds
+      const interval = setInterval(fetchAlertsCount, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   const displayName = user?.displayName ?? user?.email ?? 'User';
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -80,6 +110,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           >
             <ShieldAlert size={18} strokeWidth={isActive('/admin/safety') ? 2.2 : 1.8} />
             <span className="flex-1">Safety Monitor</span>
+            {activeAlertsCount > 0 && (
+              <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">
+                {activeAlertsCount}
+              </span>
+            )}
             {isActive('/admin/safety') && <ChevronRight size={14} className="text-red-300/70" />}
           </Link>
         )}
