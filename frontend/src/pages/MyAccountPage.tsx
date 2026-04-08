@@ -3,7 +3,6 @@ import { UserCircle, Mail, ShieldCheck, KeyRound, Eye, EyeOff, Check } from 'luc
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
-import ValidationModal from '../components/ValidationModal';
 
 export default function MyAccountPage() {
   const { user, refreshUser } = useAuth();
