@@ -112,9 +112,26 @@ function EditDonationModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before saving.');
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if (form.donationDate > today) {
+      window.alert('Donation date cannot be in the future.');
+      return;
+    }
+
     const amount = form.amount.trim() === '' ? null : parseFloat(form.amount);
     const estimatedValue = form.estimatedValue.trim() === '' ? null : parseFloat(form.estimatedValue);
+    if ((amount != null && amount < 0) || (estimatedValue != null && estimatedValue < 0)) {
+      window.alert('Amount and estimated value cannot be negative.');
+      return;
+    }
+
+    setSaving(true);
     const res = await apiFetch(`/api/donations/${donation.donationId}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -479,9 +496,20 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     organizationName: '', email: '', phone: '', country: '', status: 'Active', acquisitionChannel: '',
   });
   function set(key: string, value: string) { setForm(prev => ({ ...prev, [key]: value })); }
+  const personNameRe = /^[A-Za-z\s'\-]*$/;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before saving.');
+      return;
+    }
+    if (!personNameRe.test(form.firstName) || !personNameRe.test(form.lastName)) {
+      window.alert('First/Last name can only include letters, spaces, apostrophes, and hyphens.');
+      return;
+    }
     setSaving(true);
     const res = await apiFetch('/api/supporters', { method: 'POST', body: JSON.stringify(form) });
     if (res.ok) {

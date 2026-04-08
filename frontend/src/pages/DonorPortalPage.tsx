@@ -73,9 +73,15 @@ export default function DonorPortalPage() {
 
   async function handleDonate(e: React.FormEvent) {
     e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before submitting.');
+      return;
+    }
     setDonateError('');
     const amount = parseFloat(donateAmount);
-    if (!amount || amount <= 0) { setDonateError('Please enter a valid amount.'); return; }
+    if (!amount || amount <= 0) { setDonateError('Please enter a valid amount.'); window.alert('Donation amount must be greater than 0.'); return; }
 
     setDonateLoading(true);
     try {

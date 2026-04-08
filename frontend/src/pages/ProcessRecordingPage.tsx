@@ -129,9 +129,25 @@ function NewSessionModal({ residents, onClose, onSaved }: {
   });
 
   function set(key: string, value: string | boolean) { setForm(prev => ({ ...prev, [key]: value })); }
+  const personNameRe = /^[A-Za-z\s'\-]+$/;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before saving.');
+      return;
+    }
+    if (!personNameRe.test(form.socialWorker.trim())) {
+      window.alert("Social Worker can only include letters, spaces, apostrophes, and hyphens.");
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if (form.sessionDate > today) {
+      window.alert('Session date cannot be in the future.');
+      return;
+    }
     setSaving(true);
     const residentId = parseInt(form.residentId);
     const res = await apiFetch('/api/process-recordings', {
@@ -186,12 +202,12 @@ function NewSessionModal({ residents, onClose, onSaved }: {
             </div>
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Session Date</label>
-              <input type="date" value={form.sessionDate} onChange={e => set('sessionDate', e.target.value)}
+              <input type="date" required value={form.sessionDate} onChange={e => set('sessionDate', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Social Worker</label>
-              <input type="text" placeholder="Full name" value={form.socialWorker} onChange={e => set('socialWorker', e.target.value)} required
+              <input type="text" placeholder="Full name" pattern="[A-Za-z\s'\-]+" title="Letters, spaces, apostrophes, and hyphens only." value={form.socialWorker} onChange={e => set('socialWorker', e.target.value)} required
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
@@ -281,9 +297,25 @@ function EditSessionModal({ note, residents, onClose, onSaved }: {
   function set(key: string, value: string | boolean) {
     setForm(prev => ({ ...prev, [key]: value }));
   }
+  const personNameRe = /^[A-Za-z\s'\-]+$/;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before saving.');
+      return;
+    }
+    if (!personNameRe.test(form.socialWorker.trim())) {
+      window.alert("Social Worker can only include letters, spaces, apostrophes, and hyphens.");
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if (form.sessionDate > today) {
+      window.alert('Session date cannot be in the future.');
+      return;
+    }
     setSaving(true);
     const res = await apiFetch(`/api/process-recordings/${note.recordingId}`, {
       method: 'PUT',
@@ -338,12 +370,12 @@ function EditSessionModal({ note, residents, onClose, onSaved }: {
             </div>
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Session Date</label>
-              <input type="date" value={form.sessionDate} onChange={e => set('sessionDate', e.target.value)}
+              <input type="date" required value={form.sessionDate} onChange={e => set('sessionDate', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Social Worker</label>
-              <input type="text" placeholder="Full name" value={form.socialWorker} onChange={e => set('socialWorker', e.target.value)} required
+              <input type="text" placeholder="Full name" pattern="[A-Za-z\s'\-]+" title="Letters, spaces, apostrophes, and hyphens only." value={form.socialWorker} onChange={e => set('socialWorker', e.target.value)} required
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>

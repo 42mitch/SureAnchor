@@ -344,9 +344,25 @@ function AddResidentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   function set(key: string, value: string) {
     setForm(prev => ({ ...prev, [key]: value }));
   }
+  const personNameRe = /^[A-Za-z\s'\-]*$/;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before saving.');
+      return;
+    }
+    if (!personNameRe.test(form.assignedSocialWorker)) {
+      window.alert("Social Worker can only include letters, spaces, apostrophes, and hyphens.");
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if ((form.dateOfBirth && form.dateOfBirth > today) || (form.dateOfAdmission && form.dateOfAdmission > today)) {
+      window.alert('Date of birth and date of admission cannot be in the future.');
+      return;
+    }
     setSaving(true);
     const res = await apiFetch('/api/residents', {
       method: 'POST',
@@ -400,7 +416,7 @@ function AddResidentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
             ].map(({ label, key, placeholder, type }) => (
               <div key={key}>
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">{label}</label>
-                <input type={type ?? 'text'} placeholder={placeholder}
+                <input type={type ?? 'text'} required={key !== 'religion'} pattern={key === 'assignedSocialWorker' ? "[A-Za-z\\s'\\-]*" : undefined} title={key === 'assignedSocialWorker' ? "Letters, spaces, apostrophes, and hyphens only." : undefined} placeholder={placeholder}
                   value={(form as any)[key]} onChange={e => set(key, e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
               </div>

@@ -51,9 +51,25 @@ export function EditResidentModal({ resident, safehouses, onClose, onSaved }: Ed
   function set(key: string, value: string) {
     setForm(prev => ({ ...prev, [key]: value }));
   }
+  const personNameRe = /^[A-Za-z\s'\-]*$/;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before saving.');
+      return;
+    }
+    if (!personNameRe.test(form.assignedSocialWorker)) {
+      window.alert('Assigned social worker name can only include letters, spaces, apostrophes, and hyphens.');
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if ((form.dateOfBirth && form.dateOfBirth > today) || (form.dateOfAdmission && form.dateOfAdmission > today)) {
+      window.alert('Date of birth and date admitted cannot be in the future.');
+      return;
+    }
     setSaving(true);
     const res = await apiFetch(`/api/residents/${resident.residentId}`, {
       method: 'PUT',
@@ -217,6 +233,12 @@ export function ResidentSessionEditModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before saving.');
+      return;
+    }
     setSaving(true);
     const res = await apiFetch(`/api/process-recordings/${note.recordingId}`, {
       method: 'PUT',
@@ -376,6 +398,12 @@ export function ResidentVisitEditModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) {
+      formEl.reportValidity();
+      window.alert('Please fix the highlighted fields before saving.');
+      return;
+    }
     setSaving(true);
     const res = await apiFetch(`/api/home-visitations/${initial.visitationId}`, {
       method: 'PUT',
