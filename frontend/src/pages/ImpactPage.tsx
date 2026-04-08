@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Heart, ArrowRight, TrendingUp, Users, Shield, Home, HeartHandshake, Quote } from 'lucide-react';
 import PublicLayout from '../layouts/PublicLayout';
 import { apiFetch } from '../api';
-import { formatCurrency } from '../utils/currency';
+import { CurrencyDisplay } from '../components/CurrencyDisplay';
 
 interface ImpactStats {
   currentlyInCare: number;
@@ -100,17 +100,25 @@ export default function ImpactPage() {
             { icon: Home, value: s?.activeSafehouses, label: 'Active Safe Houses', color: 'text-teal' },
             {
               icon: HeartHandshake,
-              value: s ? formatCurrency(s.totalDonatedPhp) : undefined,
+              value: s?.totalDonatedPhp,
               label: 'Total Donated',
               color: 'text-gold',
+              isCurrency: true,
             },
-          ].map(({ icon: Icon, value, label, color }) => (
+          ].map(({ icon: Icon, value, label, color, isCurrency }) => (
             <div key={label} className="card flex flex-col items-center text-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-navy/5 flex items-center justify-center">
                 <Icon size={22} className={color} strokeWidth={1.8} />
               </div>
               {loading || value === undefined ? (
                 <div className="h-8 w-16 bg-dark/10 rounded-lg animate-pulse" />
+              ) : isCurrency ? (
+                <CurrencyDisplay
+                  php={value as number}
+                  className="items-center"
+                  usdClassName={`font-display text-3xl font-bold ${color}`}
+                  phpClassName="text-xs text-dark/30 font-normal mt-0.5"
+                />
               ) : (
                 <div className={`font-display text-3xl font-bold ${color}`}>{value}</div>
               )}

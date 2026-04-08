@@ -10,7 +10,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
-import { formatCurrency, formatCurrencyDetailed } from '../utils/currency';
+import { CurrencyDisplay, CurrencyDisplayDetailed } from '../components/CurrencyDisplay';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -529,13 +529,22 @@ function DonorDetailModal({
             {detail && (
               <div className="grid grid-cols-3 gap-3 mt-4">
                 {[
-                  { label: 'Total Given', value: formatCurrency(totalGiven), icon: HeartHandshake },
+                  { label: 'Total Given', value: totalGiven, icon: HeartHandshake, isCurrency: true },
                   { label: 'Donations', value: detail.donations.length.toString(), icon: TrendingUp },
                   { label: 'Since', value: detail.firstDonationDate ?? '—', icon: Calendar },
-                ].map(({ label, value, icon: Icon }) => (
+                ].map(({ label, value, icon: Icon, isCurrency }) => (
                   <div key={label} className="bg-white/10 rounded-xl px-3 py-2.5 text-center">
                     <Icon size={14} className="text-white/60 mx-auto mb-1" />
-                    <div className="font-display text-base font-bold text-white">{value}</div>
+                    {isCurrency ? (
+                      <CurrencyDisplay
+                        php={value as number}
+                        className="items-center"
+                        usdClassName="font-display text-base font-bold text-white"
+                        phpClassName="text-xs text-white/40 font-normal"
+                      />
+                    ) : (
+                      <div className="font-display text-base font-bold text-white">{value}</div>
+                    )}
                     <div className="text-xs text-white/50">{label}</div>
                   </div>
                 ))}
@@ -635,9 +644,18 @@ function DonorDetailModal({
                       </div>
                       <div className="text-right flex-shrink-0">
                         {d.amount != null ? (
-                          <span className="font-display text-lg font-bold text-navy">{formatCurrencyDetailed(d.amount)}</span>
+                          <CurrencyDisplayDetailed
+                            php={d.amount}
+                            className="items-end"
+                            usdClassName="font-display text-lg font-bold text-navy"
+                          />
                         ) : d.estimatedValue != null ? (
-                          <span className="text-sm font-semibold text-dark/60">~{formatCurrency(d.estimatedValue)}</span>
+                          <CurrencyDisplay
+                            php={d.estimatedValue}
+                            className="items-end"
+                            usdClassName="text-sm font-semibold text-dark/60"
+                            phpClassName="text-xs text-dark/30 font-normal"
+                          />
                         ) : (
                           <span className="text-sm text-dark/30 italic">In-kind / Time</span>
                         )}
@@ -658,7 +676,11 @@ function DonorDetailModal({
                   {totalGiven > 0 && (
                     <div className="bg-navy/5 rounded-xl px-4 py-3 flex items-center justify-between border border-navy/10">
                       <span className="text-sm font-semibold text-navy">Total Contributed</span>
-                      <span className="font-display text-xl font-bold text-navy">{formatCurrency(totalGiven)}</span>
+                      <CurrencyDisplay
+                        php={totalGiven}
+                        usdClassName="font-display text-xl font-bold text-navy"
+                        phpClassName="text-xs text-dark/30 font-normal"
+                      />
                     </div>
                   )}
                 </div>
@@ -882,14 +904,22 @@ export default function DonorsPage() {
           {[
             { icon: Users,        label: 'Total Supporters', value: totalDonors.toString(),          color: 'text-navy', bg: 'bg-navy/8' },
             { icon: Sparkles,     label: 'Active',           value: activeDonors.toString(),         color: 'text-teal', bg: 'bg-teal/10' },
-            { icon: HeartHandshake, label: 'Total Donated',  value: formatCurrency(totalDonated), color: 'text-gold', bg: 'bg-gold/10' },
-          ].map(({ icon: Icon, label, value, color, bg }) => (
+            { icon: HeartHandshake, label: 'Total Donated',  value: totalDonated, color: 'text-gold', bg: 'bg-gold/10', isCurrency: true },
+          ].map(({ icon: Icon, label, value, color, bg, isCurrency }) => (
             <div key={label} className="card flex items-center gap-4">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bg}`}>
                 <Icon size={22} className={color} strokeWidth={1.8} />
               </div>
               <div>
-                <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
+                {isCurrency ? (
+                  <CurrencyDisplay
+                    php={value as number}
+                    usdClassName={`font-display text-2xl font-bold ${color}`}
+                    phpClassName="text-xs text-dark/30 font-normal"
+                  />
+                ) : (
+                  <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
+                )}
                 <div className="text-sm text-dark/55 font-medium">{label}</div>
               </div>
             </div>
@@ -951,7 +981,7 @@ export default function DonorsPage() {
                         </td>
                         <td className="px-5 py-3.5">
                           {s.totalDonated > 0
-                            ? <span className="text-sm font-semibold text-navy">{formatCurrency(s.totalDonated)}</span>
+                            ? <CurrencyDisplay php={s.totalDonated} usdClassName="text-sm font-semibold text-navy" phpClassName="text-xs text-dark/25" />
                             : <span className="text-sm text-dark/30 italic">In-kind / Volunteer</span>
                           }
                         </td>

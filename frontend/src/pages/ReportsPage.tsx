@@ -65,7 +65,7 @@ export default function ReportsPage() {
             <TrendingUp size={20} className="text-gold" />
             <div>
               <h2 className="font-display text-xl font-semibold text-navy">Donation Trends (12 Months)</h2>
-              <p className="text-dark/45 text-sm">Monthly contributions in Philippine Pesos</p>
+              <p className="text-dark/45 text-sm">Monthly Contributions</p>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={240}>
