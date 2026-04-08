@@ -3,6 +3,7 @@ using Backend.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.Google;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,6 +54,24 @@ builder.Services.ConfigureApplicationCookie(options =>
         return Task.CompletedTask;
     };
 });
+
+// Google OAuth — only registered when credentials are present
+// Azure env var names use double-underscore: Authentication__Google__ClientId
+var googleClientId     = builder.Configuration["Authentication:Google:ClientId"];
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+
+if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    builder.Services.AddAuthentication()
+        .AddGoogle(options =>
+        {
+            options.ClientId     = googleClientId;
+            options.ClientSecret = googleClientSecret;
+            // Authorized redirect URI to register in Google Cloud Console:
+            //   Production:  https://sure-anchor.azurewebsites.net/signin-google
+            //   Local dev:   http://localhost:5022/signin-google
+        });
+}
 
 // Configure HSTS for production.
 // Azure App Service terminates TLS at the load balancer, so we can't rely on
