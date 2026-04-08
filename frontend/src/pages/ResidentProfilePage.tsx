@@ -1274,7 +1274,7 @@ export default function ResidentProfilePage() {
                           <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                           <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                           <Tooltip
-                            formatter={(val: unknown, name: unknown) => [val ?? '—', String(name)]}
+                            formatter={(val: unknown, name: unknown) => [String(val ?? '—'), String(name)]}
                             labelFormatter={(_, payload) => (payload?.[0]?.payload as any)?.fullDate ?? ''}
                             contentStyle={{ borderRadius: 12, border: '1px solid rgba(0,0,0,0.06)', fontSize: 13 }}
                           />
