@@ -50,6 +50,10 @@ interface ResidentDetail {
   dateOfBirth: string | null;
   reintegrationType: string | null;
   reintegrationStatus: string | null;
+  isPwd: boolean;
+  pwdType: string | null;
+  hasSpecialNeeds: boolean;
+  specialNeedsDiagnosis: string | null;
   recentNote: string | null;
 }
 
@@ -964,6 +968,18 @@ export default function ResidentProfilePage() {
                   { label: 'Age', value: `${resident.age} years old` },
                   { label: 'Date of Birth', value: resident.dateOfBirth?.slice(0, 10) ?? '—' },
                   { label: 'Religion', value: resident.religion ?? '—' },
+                  {
+                    label: 'Disability (PWD)',
+                    value: resident.isPwd
+                      ? `Yes${resident.pwdType ? ` — ${resident.pwdType}` : ''}`
+                      : 'No',
+                  },
+                  {
+                    label: 'Special Needs',
+                    value: resident.hasSpecialNeeds
+                      ? `Yes${resident.specialNeedsDiagnosis ? ` — ${resident.specialNeedsDiagnosis}` : ''}`
+                      : 'No',
+                  },
                   { label: 'Case Category', value: resident.category },
                   { label: 'Date Admitted', value: resident.dateAdmitted ?? '—' },
                   { label: 'Safe House', value: resident.safehouse },

@@ -81,6 +81,10 @@ public class ResidentsController : ControllerBase
             r.DateOfAdmission,
             r.ReintegrationType,
             r.ReintegrationStatus,
+            r.IsPwd,
+            r.PwdType,
+            r.HasSpecialNeeds,
+            r.SpecialNeedsDiagnosis,
             r.ProcessRecordings.FirstOrDefault()?.SessionNarrative
         );
         return Ok(dto);
@@ -205,6 +209,10 @@ public record ResidentDetailDto(
     DateOnly? DateAdmitted,
     string? ReintegrationType,
     string? ReintegrationStatus,
+    bool IsPwd,
+    string? PwdType,
+    bool HasSpecialNeeds,
+    string? SpecialNeedsDiagnosis,
     string? RecentNote
 );
 
