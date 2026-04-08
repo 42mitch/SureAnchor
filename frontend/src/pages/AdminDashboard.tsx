@@ -344,7 +344,7 @@ export default function AdminDashboard() {
           <p className="text-dark/50 text-sm mt-1">
             {new Date().toLocaleDateString('en-PH', {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-            })} · Lighthouse Sanctuary Operations
+            })} · SureAnchor Operations
           </p>
         </div>
 
@@ -641,7 +641,7 @@ export default function AdminDashboard() {
               />
               <MLPlaceholder
                 title="Social Media Posting Optimizer"
-                description="Recommends what to post, on which platform, and at what time — tailored to Lighthouse Sanctuary's specific audience patterns."
+                description="Recommends what to post, on which platform, and at what time — tailored to SureAnchor's specific audience patterns."
               />
             </div>
           </div>
