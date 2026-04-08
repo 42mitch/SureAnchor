@@ -30,6 +30,19 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
+// Google OAuth — credentials loaded from app settings / Azure env vars
+// Azure env var names use double-underscore: Authentication__Google__ClientId
+builder.Services.AddAuthentication()
+    .AddGoogle(options =>
+    {
+        options.ClientId     = builder.Configuration["Authentication:Google:ClientId"]     ?? "";
+        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
+        // Google will redirect to /signin-google (the middleware's default CallbackPath).
+        // Register that full URL in Google Cloud Console as an authorised redirect URI:
+        //   Production:  https://sure-anchor.azurewebsites.net/signin-google
+        //   Local dev:   http://localhost:5022/signin-google
+    });
+
 // Return 401/403 JSON instead of redirecting (required for SPA)
 builder.Services.ConfigureApplicationCookie(options =>
 {
