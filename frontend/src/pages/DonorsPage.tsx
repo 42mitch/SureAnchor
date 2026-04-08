@@ -10,6 +10,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
+import { formatCurrency, formatCurrencyDetailed } from '../utils/currency';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -528,7 +529,7 @@ function DonorDetailModal({
             {detail && (
               <div className="grid grid-cols-3 gap-3 mt-4">
                 {[
-                  { label: 'Total Given', value: `₱${totalGiven.toLocaleString()}`, icon: HeartHandshake },
+                  { label: 'Total Given', value: formatCurrency(totalGiven), icon: HeartHandshake },
                   { label: 'Donations', value: detail.donations.length.toString(), icon: TrendingUp },
                   { label: 'Since', value: detail.firstDonationDate ?? '—', icon: Calendar },
                 ].map(({ label, value, icon: Icon }) => (
@@ -634,9 +635,9 @@ function DonorDetailModal({
                       </div>
                       <div className="text-right flex-shrink-0">
                         {d.amount != null ? (
-                          <span className="font-display text-lg font-bold text-navy">{d.currencyCode} {d.amount.toLocaleString()}</span>
+                          <span className="font-display text-lg font-bold text-navy">{formatCurrencyDetailed(d.amount)}</span>
                         ) : d.estimatedValue != null ? (
-                          <span className="text-sm font-semibold text-dark/60">~₱{d.estimatedValue.toLocaleString()}</span>
+                          <span className="text-sm font-semibold text-dark/60">~{formatCurrency(d.estimatedValue)}</span>
                         ) : (
                           <span className="text-sm text-dark/30 italic">In-kind / Time</span>
                         )}
@@ -657,7 +658,7 @@ function DonorDetailModal({
                   {totalGiven > 0 && (
                     <div className="bg-navy/5 rounded-xl px-4 py-3 flex items-center justify-between border border-navy/10">
                       <span className="text-sm font-semibold text-navy">Total Contributed</span>
-                      <span className="font-display text-xl font-bold text-navy">₱{totalGiven.toLocaleString()}</span>
+                      <span className="font-display text-xl font-bold text-navy">{formatCurrency(totalGiven)}</span>
                     </div>
                   )}
                 </div>
@@ -881,7 +882,7 @@ export default function DonorsPage() {
           {[
             { icon: Users,        label: 'Total Supporters', value: totalDonors.toString(),          color: 'text-navy', bg: 'bg-navy/8' },
             { icon: Sparkles,     label: 'Active',           value: activeDonors.toString(),         color: 'text-teal', bg: 'bg-teal/10' },
-            { icon: HeartHandshake, label: 'Total Donated',  value: `₱${totalDonated.toLocaleString()}`, color: 'text-gold', bg: 'bg-gold/10' },
+            { icon: HeartHandshake, label: 'Total Donated',  value: formatCurrency(totalDonated), color: 'text-gold', bg: 'bg-gold/10' },
           ].map(({ icon: Icon, label, value, color, bg }) => (
             <div key={label} className="card flex items-center gap-4">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bg}`}>
@@ -950,7 +951,7 @@ export default function DonorsPage() {
                         </td>
                         <td className="px-5 py-3.5">
                           {s.totalDonated > 0
-                            ? <span className="text-sm font-semibold text-navy">₱{s.totalDonated.toLocaleString()}</span>
+                            ? <span className="text-sm font-semibold text-navy">{formatCurrency(s.totalDonated)}</span>
                             : <span className="text-sm text-dark/30 italic">In-kind / Volunteer</span>
                           }
                         </td>

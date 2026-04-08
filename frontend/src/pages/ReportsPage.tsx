@@ -7,13 +7,14 @@ import AdminLayout from '../layouts/AdminLayout';
 import { donationTrend, residentOutcomes, safehousePerformance } from '../data/mockData';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
+import { formatCurrencyDetailed, formatCurrencyAxis } from '../utils/currency';
 
 const CustomTooltipPeso = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
     return (
       <div className="bg-white rounded-xl shadow-card px-4 py-3 border border-dark/8">
         <p className="text-xs text-dark/50 mb-1">{label}</p>
-        <p className="text-sm font-semibold text-navy">₱{Number(payload[0].value).toLocaleString()}</p>
+        <p className="text-sm font-semibold text-navy">{formatCurrencyDetailed(Number(payload[0].value))}</p>
       </div>
     );
   }
@@ -75,7 +76,7 @@ export default function ReportsPage() {
                 tick={{ fontSize: 11, fill: '#9CA3AF' }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v) => `₱${(v / 1000).toFixed(0)}K`}
+                tickFormatter={(v) => formatCurrencyAxis(v)}
               />
               <Tooltip content={<CustomTooltipPeso />} />
               <Line

@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
+import { formatCurrency } from '../utils/currency';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,11 +77,8 @@ const PLATFORM_COLORS: Record<string, string> = {
   WhatsApp: '#25D366',
 };
 
-function fmt(n: number) {
-  if (n >= 1_000_000) return `₱${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `₱${(n / 1_000).toFixed(1)}K`;
-  return `₱${n.toFixed(0)}`;
-}
+// Format currency showing USD (PHP)
+const fmt = (n: number) => formatCurrency(n);
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 

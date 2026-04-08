@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Heart, ArrowRight, TrendingUp, Users, Shield, Home, HeartHandshake, Quote } from 'lucide-react';
 import PublicLayout from '../layouts/PublicLayout';
 import { apiFetch } from '../api';
+import { formatCurrency } from '../utils/currency';
 
 interface ImpactStats {
   currentlyInCare: number;
@@ -99,8 +100,8 @@ export default function ImpactPage() {
             { icon: Home, value: s?.activeSafehouses, label: 'Active Safe Houses', color: 'text-teal' },
             {
               icon: HeartHandshake,
-              value: s ? `₱${Math.round(s.totalDonatedPhp / 1000)}K` : undefined,
-              label: 'Total Donated (PHP)',
+              value: s ? formatCurrency(s.totalDonatedPhp) : undefined,
+              label: 'Total Donated',
               color: 'text-gold',
             },
           ].map(({ icon: Icon, value, label, color }) => (
@@ -146,7 +147,7 @@ export default function ImpactPage() {
           <Heart size={28} className="text-white/80 mb-3" strokeWidth={1.5} />
           <h3 className="font-display text-2xl font-bold mb-3">Your donations make this possible</h3>
           <p className="text-white/75 text-sm leading-relaxed mb-6">
-            ₱5,000 provides one month of counseling for a survivor. ₱15,000 covers educational materials for a safe house for a term. Every peso anchors a young woman&apos;s hope.
+            $86 (₱5,000) provides one month of counseling for a survivor. $258 (₱15,000) covers educational materials for a safe house for a term. Every dollar anchors a young woman&apos;s hope.
           </p>
           <Link
             to="/login"
