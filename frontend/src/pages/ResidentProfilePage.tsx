@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, FileText, Home, Shield, Calendar,
   AlertTriangle, CheckCircle, Clock, ChevronRight, Activity,
   BookOpen, Heart, MapPin, Hash, Pencil, Trash2, GraduationCap,
-  Stethoscope, Plus, X
+  Stethoscope, Plus, X, ClipboardList, Flag, RefreshCw as Refresh
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -308,6 +308,182 @@ function HealthRecordModal({
   );
 }
 
+// ─── Intervention plan types & modal ─────────────────────────────────────────
+
+interface InterventionPlan {
+  planId: number;
+  residentId: number;
+  planCategory: string;
+  planDescription: string | null;
+  servicesProvided: string | null;
+  targetValue: number | null;
+  targetDate: string | null;
+  status: string;
+  caseConferenceDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const PLAN_CATEGORIES = [
+  'Psychosocial', 'Educational', 'Health', 'Legal', 'Livelihood',
+  'Family Reintegration', 'Shelter', 'Spiritual', 'Other',
+];
+
+const PLAN_STATUSES = ['Pending', 'In Progress', 'Completed', 'On Hold', 'Cancelled'];
+
+function statusPlanBadge(status: string) {
+  const map: Record<string, string> = {
+    'Pending':     'bg-yellow-100 text-yellow-700 border border-yellow-200',
+    'In Progress': 'bg-blue-100 text-blue-700 border border-blue-200',
+    'Completed':   'bg-green-100 text-green-700 border border-green-200',
+    'On Hold':     'bg-gray-100 text-gray-600 border border-gray-200',
+    'Cancelled':   'bg-red-100 text-red-500 border border-red-200',
+  };
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${map[status] || 'bg-gray-100 text-gray-600'}`}>
+      {status}
+    </span>
+  );
+}
+
+function InterventionPlanModal({
+  residentId, plan, onClose, onSaved,
+}: {
+  residentId: number;
+  plan: InterventionPlan | null;
+  onClose: () => void;
+  onSaved: (p: InterventionPlan) => void;
+}) {
+  const isEdit = plan !== null;
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    planCategory:       plan?.planCategory       ?? 'Psychosocial',
+    planDescription:    plan?.planDescription    ?? '',
+    servicesProvided:   plan?.servicesProvided   ?? '',
+    targetValue:        plan?.targetValue?.toString() ?? '',
+    targetDate:         plan?.targetDate         ?? '',
+    status:             plan?.status             ?? 'Pending',
+    caseConferenceDate: plan?.caseConferenceDate ?? '',
+  });
+
+  function set(key: string, val: string) { setForm(prev => ({ ...prev, [key]: val })); }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    const body = {
+      residentId,
+      planCategory:       form.planCategory,
+      planDescription:    form.planDescription    || null,
+      servicesProvided:   form.servicesProvided   || null,
+      targetValue:        form.targetValue         ? parseFloat(form.targetValue) : null,
+      targetDate:         form.targetDate          || null,
+      status:             form.status,
+      caseConferenceDate: form.caseConferenceDate  || null,
+    };
+    const url    = isEdit ? `/api/intervention-plans/${plan!.planId}` : '/api/intervention-plans';
+    const method = isEdit ? 'PUT' : 'POST';
+    const res    = await apiFetch(url, { method, body: JSON.stringify(body) });
+    if (res.ok) {
+      const now = new Date().toISOString().slice(0, 10);
+      const saved: InterventionPlan = isEdit
+        ? { ...plan!, ...body, updatedAt: now }
+        : { planId: (await res.json()).planId, ...body, createdAt: now, updatedAt: now };
+      onSaved(saved);
+      onClose();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setError(d.message ?? d.error ?? 'Failed to save.');
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto animate-fade-in">
+        <div className="sticky top-0 bg-white rounded-t-2xl px-5 py-4 border-b border-dark/8 flex items-center justify-between z-10">
+          <h3 className="font-display text-lg font-bold text-navy">
+            {isEdit ? 'Edit Intervention Plan' : 'Add Intervention Plan'}
+          </h3>
+          <button onClick={onClose} className="text-dark/35 hover:text-dark p-1.5 rounded-lg hover:bg-dark/6 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && (
+            <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Category *</label>
+              <select value={form.planCategory} onChange={e => set('planCategory', e.target.value)} required
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {PLAN_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Status *</label>
+              <select value={form.status} onChange={e => set('status', e.target.value)} required
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {PLAN_STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Plan Description</label>
+            <textarea value={form.planDescription} onChange={e => set('planDescription', e.target.value)} rows={3}
+              placeholder="Describe the intervention goals and approach…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Services Provided</label>
+            <textarea value={form.servicesProvided} onChange={e => set('servicesProvided', e.target.value)} rows={2}
+              placeholder="e.g. Individual counseling, skills training, referral…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Target Date</label>
+              <input type="date" value={form.targetDate} onChange={e => set('targetDate', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Target Value</label>
+              <input type="number" step="0.01" value={form.targetValue} onChange={e => set('targetValue', e.target.value)}
+                placeholder="Optional numeric goal"
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Case Conference Date</label>
+            <input type="date" value={form.caseConferenceDate} onChange={e => set('caseConferenceDate', e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary text-sm disabled:opacity-60">
+              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Plan'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function parseRecordDate(d: string): Date | null {
   if (!d) return null;
   const parsed = new Date(d);
@@ -451,7 +627,8 @@ const TABS = [
   { id: 'sessions',   label: 'Counseling Sessions', icon: FileText     },
   { id: 'visitations',label: 'Home Visitations',    icon: Home         },
   { id: 'education',  label: 'Education',            icon: GraduationCap},
-  { id: 'health',     label: 'Health & Wellbeing',  icon: Stethoscope  },
+  { id: 'health',        label: 'Health & Wellbeing', icon: Stethoscope   },
+  { id: 'intervention',  label: 'Intervention Plans', icon: ClipboardList },
 ];
 
 function toSessionNoteRow(n: ProcessRecording): SessionNoteRow {
@@ -487,6 +664,12 @@ export default function ResidentProfilePage() {
   const [healthRecordToEdit, setHealthRecordToEdit] = useState<HealthRecord | null>(null);
   const [healthDeleteTarget, setHealthDeleteTarget] = useState<HealthRecord | null>(null);
   const [healthDeleteLoading, setHealthDeleteLoading] = useState(false);
+
+  const [interventionPlans, setInterventionPlans] = useState<InterventionPlan[]>([]);
+  const [interventionModalOpen, setInterventionModalOpen] = useState(false);
+  const [interventionToEdit, setInterventionToEdit] = useState<InterventionPlan | null>(null);
+  const [interventionDeleteTarget, setInterventionDeleteTarget] = useState<InterventionPlan | null>(null);
+  const [interventionDeleteLoading, setInterventionDeleteLoading] = useState(false);
   const [safehouses, setSafehouses] = useState<SafehouseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -549,13 +732,15 @@ export default function ResidentProfilePage() {
       apiFetch(`/api/home-visitations?residentId=${id}`).then(r => r.ok ? r.json() : []),
       apiFetch(`/api/education-records?residentId=${id}`).then(r => r.ok ? r.json() : []),
       apiFetch(`/api/health-records?residentId=${id}`).then(r => r.ok ? r.json() : []),
-    ]).then(([res, recs, visits, edu, health]) => {
+      apiFetch(`/api/intervention-plans?residentId=${id}`).then(r => r.ok ? r.json() : []),
+    ]).then(([res, recs, visits, edu, health, plans]) => {
       if (!res) { setNotFound(true); return; }
       setResident(res);
       setSessions(recs);
       setVisitations(visits);
       setEducationRecords(edu);
       setHealthRecords(health);
+      setInterventionPlans(plans);
     }).finally(() => setLoading(false));
   }, [id]);
 
@@ -600,6 +785,15 @@ export default function ResidentProfilePage() {
     setHealthRecords(prev => prev.filter(r => r.healthRecordId !== healthDeleteTarget.healthRecordId));
     setHealthDeleteTarget(null);
     setHealthDeleteLoading(false);
+  }
+
+  async function handleDeleteIntervention() {
+    if (!interventionDeleteTarget) return;
+    setInterventionDeleteLoading(true);
+    await apiFetch(`/api/intervention-plans/${interventionDeleteTarget.planId}`, { method: 'DELETE' });
+    setInterventionPlans(prev => prev.filter(p => p.planId !== interventionDeleteTarget.planId));
+    setInterventionDeleteTarget(null);
+    setInterventionDeleteLoading(false);
   }
 
   const residentFormProps: ResidentDetailForm | null = resident
@@ -1389,6 +1583,123 @@ export default function ResidentProfilePage() {
             )}
           </div>
         )}
+
+        {/* ── INTERVENTION PLANS TAB ────────────────────────────────────────── */}
+        {activeTab === 'intervention' && (
+          <div className="space-y-5">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-xl font-semibold text-navy">Intervention Plans</h2>
+                <p className="text-dark/45 text-sm mt-0.5">Case intervention goals, services, and progress</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => { setInterventionToEdit(null); setInterventionModalOpen(true); }}
+                  className="btn-primary flex items-center gap-2 text-sm"
+                >
+                  <Plus size={15} /> Add Plan
+                </button>
+              )}
+            </div>
+
+            {/* Status summary pills */}
+            {interventionPlans.length > 0 && (() => {
+              const counts: Record<string, number> = {};
+              interventionPlans.forEach(p => { counts[p.status] = (counts[p.status] ?? 0) + 1; });
+              return (
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(counts).map(([status, count]) => (
+                    <div key={status} className="flex items-center gap-1.5 bg-white rounded-xl px-3 py-2 shadow-sm border border-dark/6 text-sm">
+                      {statusPlanBadge(status)}
+                      <span className="font-semibold text-dark ml-1">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {interventionPlans.length === 0 ? (
+              <div className="card text-center py-16">
+                <ClipboardList size={40} className="text-dark/20 mx-auto mb-3" />
+                <p className="font-display text-lg font-semibold text-navy mb-1">No Intervention Plans</p>
+                <p className="text-dark/45 text-sm">Intervention plans for this resident will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {interventionPlans.map(p => (
+                  <div key={p.planId} className="card">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-navy/8 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Flag size={16} className="text-navy" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-dark text-sm">{p.planCategory}</span>
+                            {statusPlanBadge(p.status)}
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 mt-0.5">
+                            {p.targetDate && (
+                              <span className="text-xs text-dark/45 flex items-center gap-1">
+                                <Calendar size={10} /> Target: {p.targetDate}
+                              </span>
+                            )}
+                            {p.caseConferenceDate && (
+                              <span className="text-xs text-dark/45 flex items-center gap-1">
+                                <Refresh size={10} /> Conference: {p.caseConferenceDate}
+                              </span>
+                            )}
+                            {p.targetValue != null && (
+                              <span className="text-xs text-dark/45">Goal value: {p.targetValue}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => { setInterventionToEdit(p); setInterventionModalOpen(true); }}
+                            className="p-1.5 rounded-lg text-dark/30 hover:text-teal hover:bg-teal/10 transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => setInterventionDeleteTarget(p)}
+                            className="p-1.5 rounded-lg text-dark/30 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {p.planDescription && (
+                      <div className="mt-3 border-t border-dark/6 pt-3">
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Description</p>
+                        <p className="text-sm text-dark/70 leading-relaxed">{p.planDescription}</p>
+                      </div>
+                    )}
+
+                    {p.servicesProvided && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Services Provided</p>
+                        <p className="text-sm text-dark/70 leading-relaxed">{p.servicesProvided}</p>
+                      </div>
+                    )}
+
+                    <div className="mt-3 pt-2 border-t border-dark/5 flex gap-4 text-xs text-dark/35">
+                      <span>Added {p.createdAt}</span>
+                      {p.updatedAt !== p.createdAt && <span>Updated {p.updatedAt}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {showEditResident && residentFormProps && safehouses.length > 0 && (
@@ -1494,6 +1805,30 @@ export default function ResidentProfilePage() {
           onConfirm={handleDeleteHealth}
           onCancel={() => setHealthDeleteTarget(null)}
           loading={healthDeleteLoading}
+        />
+      )}
+      {interventionModalOpen && resident && (
+        <InterventionPlanModal
+          residentId={resident.residentId}
+          plan={interventionToEdit}
+          onClose={() => { setInterventionModalOpen(false); setInterventionToEdit(null); }}
+          onSaved={saved => {
+            setInterventionPlans(prev => {
+              const exists = prev.find(p => p.planId === saved.planId);
+              return exists
+                ? prev.map(p => p.planId === saved.planId ? saved : p)
+                : [saved, ...prev];
+            });
+          }}
+        />
+      )}
+      {interventionDeleteTarget && (
+        <ConfirmDeleteModal
+          title="Delete intervention plan"
+          description={`Permanently delete the "${interventionDeleteTarget.planCategory}" intervention plan? This cannot be undone.`}
+          onConfirm={handleDeleteIntervention}
+          onCancel={() => setInterventionDeleteTarget(null)}
+          loading={interventionDeleteLoading}
         />
       )}
     </AdminLayout>
