@@ -111,6 +111,7 @@ public class DonationsController : ControllerBase
     [Authorize(Roles = "Donor")]
     public async Task<IActionResult> Give([FromBody] DonorGiveDto dto)
     {
+        string stage = "load-user";
         try
         {
             var appUser = await _userManager.GetUserAsync(User);
@@ -119,7 +120,7 @@ public class DonationsController : ControllerBase
             // Auto-create a Supporter record if the donor doesn't have one yet
             if (appUser.SupporterId == null)
             {
-                // Manually assign next ID since the pre-existing table may not have IDENTITY set
+                stage = "create-supporter";
                 var nextId = (_db.Supporters.Any() ? _db.Supporters.Max(s => s.SupporterId) : 0) + 1;
                 var supporter = new Supporter
                 {
@@ -134,20 +135,25 @@ public class DonationsController : ControllerBase
                 };
                 _db.Supporters.Add(supporter);
                 await _db.SaveChangesAsync();
+
+                stage = "link-supporter";
                 appUser.SupporterId = supporter.SupporterId;
-                await _userManager.UpdateAsync(appUser);
+                var updateResult = await _userManager.UpdateAsync(appUser);
+                if (!updateResult.Succeeded)
+                    return StatusCode(500, new { error = "Failed to link supporter to user.", detail = string.Join("; ", updateResult.Errors.Select(e => e.Description)), stage });
             }
 
-            // Reload user to ensure SupporterId is current
-            var freshUser = await _userManager.GetUserAsync(User);
-            if (freshUser?.SupporterId == null)
-                return StatusCode(500, new { error = "Could not resolve donor supporter record." });
+            stage = "resolve-supporter-id";
+            var supporterId = appUser.SupporterId;
+            if (supporterId == null)
+                return StatusCode(500, new { error = "Could not resolve donor supporter record.", stage });
 
+            stage = "create-donation";
             var nextDonationId = (_db.Donations.Any() ? _db.Donations.Max(d => d.DonationId) : 0) + 1;
             var donation = new Donation
             {
                 DonationId    = nextDonationId,
-                SupporterId   = freshUser.SupporterId.Value,
+                SupporterId   = supporterId.Value,
                 DonationType  = "Monetary",
                 DonationDate  = DateOnly.FromDateTime(DateTime.UtcNow),
                 IsRecurring   = false,
@@ -168,7 +174,7 @@ public class DonationsController : ControllerBase
             {
                 error  = ex.Message,
                 detail = ex.InnerException?.Message,
-                stage  = "give-endpoint"
+                stage
             });
         }
     }

@@ -93,7 +93,7 @@ export default function DonorPortalPage() {
         method: 'POST',
         body: JSON.stringify({ amount, campaignName: donateCampaign, notes: donateNotes || null }),
       });
-      if (!res.ok) { const d = await res.json(); setDonateError(d.message ?? 'Something went wrong.'); return; }
+      if (!res.ok) { const d = await res.json(); setDonateError(d.error ?? d.message ?? 'Something went wrong.'); return; }
       setDonateSuccess(true);
       // Reload donation data after a moment
       setTimeout(() => {
