@@ -12,8 +12,6 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
@@ -303,10 +301,6 @@ export default function ResidentProfilePage() {
         (parseRecordDate(b.recordDate)?.getTime() ?? 0) -
         (parseRecordDate(a.recordDate)?.getTime() ?? 0)
     )[0];
-    const spanLabel =
-      educationMonthSeries.length >= 1
-        ? `${educationMonthSeries[0].monthLabel} → ${educationMonthSeries[educationMonthSeries.length - 1].monthLabel}`
-        : '—';
     return {
       monthCount: educationMonthSeries.length,
       recordCount: educationRecords.length,
@@ -315,7 +309,6 @@ export default function ResidentProfilePage() {
       latestLevel: latest?.educationLevel?.trim() || '—',
       latestEnrollment: latest?.enrollmentStatus?.trim() || '—',
       latestCompletion: latest?.completionStatus?.trim() || '—',
-      spanLabel,
     };
   }, [educationRecords, educationMonthSeries]);
 
@@ -830,7 +823,7 @@ export default function ResidentProfilePage() {
                 </p>
 
                 {/* Summary — general information */}
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[
                     {
                       label: 'Months with data',
@@ -855,15 +848,6 @@ export default function ResidentProfilePage() {
                           : '—',
                       sub: 'Curriculum / goals',
                       accent: 'from-yellow-600 to-gold',
-                    },
-                    {
-                      label: 'Reporting span',
-                      value:
-                        educationSummary.monthCount > 0
-                          ? `${educationSummary.monthCount} mo.`
-                          : '—',
-                      sub: educationSummary.spanLabel,
-                      accent: 'from-slate-600 to-slate-700',
                     },
                   ].map(({ label, value, sub, accent }) => (
                     <div
@@ -900,89 +884,6 @@ export default function ResidentProfilePage() {
                       <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-1">Completion status</p>
                       <p className="font-semibold text-dark">{educationSummary.latestCompletion}</p>
                     </div>
-                  </div>
-                </div>
-
-                {/* Charts — by month */}
-                <div className="grid lg:grid-cols-2 gap-6">
-                  <div className="card">
-                    <h2 className="font-display text-lg font-semibold text-navy mb-1">Attendance by month</h2>
-                    <p className="text-dark/45 text-sm mb-4">Average % where reported</p>
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={educationMonthSeries} barSize={28}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
-                        <XAxis
-                          dataKey="shortMonth"
-                          tick={{ fontSize: 11, fill: '#9CA3AF' }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11, fill: '#9CA3AF' }}
-                          axisLine={false}
-                          tickLine={false}
-                          domain={[0, 100]}
-                          tickFormatter={(v) => `${v}%`}
-                        />
-                        <Tooltip
-                          formatter={(value: unknown) => {
-                            const n = typeof value === 'number' ? value : Number(value);
-                            return !Number.isNaN(n) && value != null && value !== ''
-                              ? [`${n}%`, 'Attendance']
-                              : ['—', 'Attendance'];
-                          }}
-                          labelFormatter={(_, payload) =>
-                            (payload?.[0]?.payload as EducationMonthRow | undefined)?.monthLabel ?? ''
-                          }
-                          contentStyle={{
-                            borderRadius: 12,
-                            border: '1px solid rgba(0,0,0,0.06)',
-                            fontSize: 13,
-                          }}
-                        />
-                        <Bar dataKey="attendance" name="Attendance" fill="#2D8F8A" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="card">
-                    <h2 className="font-display text-lg font-semibold text-navy mb-1">Progress by month</h2>
-                    <p className="text-dark/45 text-sm mb-4">Average % toward goals</p>
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={educationMonthSeries} barSize={28}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
-                        <XAxis
-                          dataKey="shortMonth"
-                          tick={{ fontSize: 11, fill: '#9CA3AF' }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11, fill: '#9CA3AF' }}
-                          axisLine={false}
-                          tickLine={false}
-                          domain={[0, 100]}
-                          tickFormatter={(v) => `${v}%`}
-                        />
-                        <Tooltip
-                          formatter={(value: unknown) => {
-                            const n = typeof value === 'number' ? value : Number(value);
-                            return !Number.isNaN(n) && value != null && value !== ''
-                              ? [`${n}%`, 'Progress']
-                              : ['—', 'Progress'];
-                          }}
-                          labelFormatter={(_, payload) =>
-                            (payload?.[0]?.payload as EducationMonthRow | undefined)?.monthLabel ?? ''
-                          }
-                          contentStyle={{
-                            borderRadius: 12,
-                            border: '1px solid rgba(0,0,0,0.06)',
-                            fontSize: 13,
-                          }}
-                        />
-                        <Bar dataKey="progress" name="Progress" fill="#1B3A5C" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
                   </div>
                 </div>
 
