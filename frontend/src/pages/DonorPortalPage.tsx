@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 
@@ -53,6 +54,7 @@ export default function DonorPortalPage() {
   const [donateLoading, setDonateLoading] = useState(false);
   const [donateSuccess, setDonateSuccess] = useState(false);
   const [donateError, setDonateError] = useState('');
+  const [validationMsg, setValidationMsg] = useState('');
 
   function loadData() {
     setLoading(true);
@@ -76,12 +78,14 @@ export default function DonorPortalPage() {
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      window.alert('Please fix the highlighted fields before submitting.');
       return;
     }
     setDonateError('');
     const amount = parseFloat(donateAmount);
-    if (!amount || amount <= 0) { setDonateError('Please enter a valid amount.'); window.alert('Donation amount must be greater than 0.'); return; }
+    if (!amount || amount <= 0) {
+      setValidationMsg('Please enter a donation amount greater than 0.');
+      return;
+    }
 
     setDonateLoading(true);
     try {
@@ -348,6 +352,8 @@ export default function DonorPortalPage() {
           © 2024 SureAnchor · "We have this hope as an anchor for the soul." — Hebrews 6:19
         </footer>
       </div>
+
+      {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
 
       {/* ── Donate Modal ─────────────────────────────────────────────────────── */}
       {showDonate && (

@@ -7,6 +7,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 
@@ -93,6 +94,7 @@ function EditDonationModal({
   onSaved: (d: DonationRow) => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
     donationType: donation.donationType,
     donationDate: donation.donationDate,
@@ -115,19 +117,18 @@ function EditDonationModal({
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      window.alert('Please fix the highlighted fields before saving.');
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
     if (form.donationDate > today) {
-      window.alert('Donation date cannot be in the future.');
+      setValidationMsg('Donation date cannot be in the future.');
       return;
     }
 
     const amount = form.amount.trim() === '' ? null : parseFloat(form.amount);
     const estimatedValue = form.estimatedValue.trim() === '' ? null : parseFloat(form.estimatedValue);
     if ((amount != null && amount < 0) || (estimatedValue != null && estimatedValue < 0)) {
-      window.alert('Amount and estimated value cannot be negative.');
+      setValidationMsg('Amount and estimated value cannot be negative.');
       return;
     }
 
@@ -168,6 +169,8 @@ function EditDonationModal({
   }
 
   return (
+    <>
+    {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
@@ -247,6 +250,7 @@ function EditDonationModal({
         </form>
       </div>
     </div>
+    </>
   );
 }
 
@@ -491,6 +495,7 @@ function DonorDetailModal({
 
 function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved: (s: Supporter) => void }) {
   const [saving, setSaving] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
     displayName: '', supporterType: 'MonetaryDonor', firstName: '', lastName: '',
     organizationName: '', email: '', phone: '', country: '', status: 'Active', acquisitionChannel: '',
@@ -503,11 +508,10 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      window.alert('Please fix the highlighted fields before saving.');
       return;
     }
     if (!personNameRe.test(form.firstName) || !personNameRe.test(form.lastName)) {
-      window.alert('First/Last name can only include letters, spaces, apostrophes, and hyphens.');
+      setValidationMsg('First and last name can only include letters, spaces, apostrophes, and hyphens.');
       return;
     }
     setSaving(true);
@@ -521,6 +525,8 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   }
 
   return (
+    <>
+    {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
@@ -590,6 +596,7 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         </form>
       </div>
     </div>
+    </>
   );
 }
 

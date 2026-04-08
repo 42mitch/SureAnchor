@@ -5,6 +5,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 
@@ -335,6 +336,7 @@ export default function CaseloadPage() {
 
 function AddResidentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (r: Resident) => void }) {
   const [saving, setSaving] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
     caseControlNo: '', internalCode: '', safehouseId: '', caseStatus: 'Active',
     caseCategory: '', currentRiskLevel: 'Medium', assignedSocialWorker: '',
@@ -351,16 +353,15 @@ function AddResidentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      window.alert('Please fix the highlighted fields before saving.');
       return;
     }
     if (!personNameRe.test(form.assignedSocialWorker)) {
-      window.alert("Social Worker can only include letters, spaces, apostrophes, and hyphens.");
+      setValidationMsg("Social worker name can only include letters, spaces, apostrophes, and hyphens.");
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
     if ((form.dateOfBirth && form.dateOfBirth > today) || (form.dateOfAdmission && form.dateOfAdmission > today)) {
-      window.alert('Date of birth and date of admission cannot be in the future.');
+      setValidationMsg('Date of birth and date of admission cannot be in the future.');
       return;
     }
     setSaving(true);
@@ -394,6 +395,8 @@ function AddResidentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   }
 
   return (
+    <>
+    {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
@@ -453,5 +456,6 @@ function AddResidentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         </form>
       </div>
     </div>
+    </>
   );
 }
