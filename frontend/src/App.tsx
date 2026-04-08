@@ -14,15 +14,19 @@ import ReportsPage from './pages/ReportsPage';
 import VisitationsPage from './pages/VisitationsPage';
 import ResidentProfilePage from './pages/ResidentProfilePage';
 import SafetyPage from './pages/SafetyPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import CookieConsent from './components/CookieConsent';
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <CookieConsent />
         <Routes>
           {/* Public — no auth required */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/impact" element={<ImpactPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
