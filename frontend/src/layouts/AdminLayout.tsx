@@ -13,14 +13,23 @@ interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
-const navItems = [
-  { label: 'Dashboard',         href: '/admin',                   icon: LayoutDashboard },
-  { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
-  { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
-  { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
-  { label: 'Donors',            href: '/admin/donors',            icon: HeartHandshake },
-  { label: 'Reports',           href: '/admin/reports',           icon: BarChart2 },
-];
+const { user } = useAuth();
+const isAdmin = user?.roles.includes('Admin') ?? false;
+
+const navItems = isAdmin
+  ? [
+      { label: 'Dashboard',         href: '/admin',                   icon: LayoutDashboard },
+      { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
+      { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
+      { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
+      { label: 'Donors',            href: '/admin/donors',            icon: HeartHandshake },
+      { label: 'Reports',           href: '/admin/reports',           icon: BarChart2 },
+    ]
+  : [
+      { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
+      { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
+      { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
+    ];
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen]             = useState(false);

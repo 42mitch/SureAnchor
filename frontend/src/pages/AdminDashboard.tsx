@@ -13,6 +13,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
 import { formatCurrency, formatUsdK, phpToUsd } from '../utils/currency';
 import { CurrencyDisplay } from '../components/CurrencyDisplay';
+import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -343,13 +344,17 @@ export default function AdminDashboard() {
 
   const loading = loadingResidents || loadingDonations || loadingSafehouses;
 
+  const { user } = useAuth();
+
   return (
     <AdminLayout>
       <div className="space-y-6 animate-fade-in">
 
         {/* Header */}
         <div>
-          <h1 className="font-display text-2xl font-bold text-navy">Good morning, Admin</h1>
+        <h1 className="font-display text-2xl font-bold text-navy">
+          Good morning, {user?.displayName?.split(' ')[0] ?? 'Admin'}
+        </h1>
           <p className="text-dark/50 text-sm mt-1">
             {new Date().toLocaleDateString('en-PH', {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
