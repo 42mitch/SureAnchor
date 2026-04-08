@@ -13,24 +13,6 @@ interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
-const { user } = useAuth();
-const isAdmin = user?.roles.includes('Admin') ?? false;
-
-const navItems = isAdmin
-  ? [
-      { label: 'Dashboard',         href: '/admin',                   icon: LayoutDashboard },
-      { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
-      { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
-      { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
-      { label: 'Donors',            href: '/admin/donors',            icon: HeartHandshake },
-      { label: 'Reports',           href: '/admin/reports',           icon: BarChart2 },
-    ]
-  : [
-      { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
-      { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
-      { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
-    ];
-
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen]             = useState(false);
   const [profileOpen, setProfileOpen]             = useState(false);
@@ -39,6 +21,23 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const location   = useLocation();
   const navigate   = useNavigate();
   const { user, logout } = useAuth();
+
+  const isAdmin = user?.roles.includes('Admin') ?? false;
+
+  const navItems = isAdmin
+    ? [
+        { label: 'Dashboard',         href: '/admin',                   icon: LayoutDashboard },
+        { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
+        { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
+        { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
+        { label: 'Donors',            href: '/admin/donors',            icon: HeartHandshake },
+        { label: 'Reports',           href: '/admin/reports',           icon: BarChart2 },
+      ]
+    : [
+        { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
+        { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
+        { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
+      ];
 
   async function handleLogout() {
     await logout();
@@ -77,19 +76,19 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         console.error('Failed to fetch alerts count:', error);
       }
     }
-    if (user?.roles.includes('Admin')) {
+    if (isAdmin) {
       fetchAlertsCount();
       const interval = setInterval(fetchAlertsCount, 60000);
       return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [isAdmin]);
 
   const displayName = user?.displayName ?? user?.email ?? 'User';
   const nameParts   = displayName.trim().split(/\s+/);
   const initials    = nameParts.length >= 2
     ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
     : displayName.slice(0, 2).toUpperCase();
-  const roleLabel   = user?.roles.includes('Admin') ? 'Admin'
+  const roleLabel   = isAdmin ? 'Admin'
     : user?.roles.includes('Staff') ? 'Staff'
     : user?.roles.includes('Donor') ? 'Donor'
     : 'User';
@@ -127,7 +126,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         ))}
 
         {/* Admin-only links */}
-        {user?.roles.includes('Admin') && (
+        {isAdmin && (
           <>
             <Link
               to="/admin/safety"
