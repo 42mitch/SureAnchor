@@ -9,7 +9,6 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  // Use the "from" location if present, otherwise decide by role
   const fromPath = (location.state as { from?: { pathname: string } })?.from?.pathname;
 
   const [email, setEmail] = useState('');
@@ -27,14 +26,9 @@ export default function LoginPage() {
     if (result.error) {
       setError(result.error);
     } else {
-      // result.user is set in AuthContext after login; get it via the context
-      // We redirect after login by reading the roles from the returned user
-      // AuthContext.login returns {} on success so we need to read user from context
-      // Use fromPath if available, otherwise use role-based default
       if (fromPath) {
         navigate(fromPath, { replace: true });
       } else {
-        // Roles are in the auth context after login — navigate via result
         navigate(result.destination ?? '/admin', { replace: true });
       }
     }
@@ -56,7 +50,7 @@ export default function LoginPage() {
             <div className="flex flex-col items-center gap-3">
               <AnchorLogo size="lg" variant="dark" />
               <p className="text-dark/40 text-xs text-center font-sans max-w-xs leading-relaxed">
-                Staff portal — authorized access only
+                Sign in to your account
               </p>
             </div>
           </div>
@@ -89,7 +83,7 @@ export default function LoginPage() {
                   onChange={e => setEmail(e.target.value)}
                   required
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm placeholder-dark/30 transition-all"
-                  placeholder="you@sureanchor.org"
+                  placeholder="you@example.com"
                 />
               </div>
             </div>
@@ -136,7 +130,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Privacy */}
           <div className="relative flex items-center gap-3 mt-6">
             <div className="flex-1 h-px bg-dark/10" />
             <span className="text-xs font-medium text-dark/30">or</span>
@@ -152,9 +145,9 @@ export default function LoginPage() {
 
           <p className="text-center text-xs text-dark/30 mt-6">
             By signing in you agree to our{' '}
-            <a href="#" className="text-teal hover:underline">Privacy Policy</a>
-            {' '}and{' '}
-            <a href="#" className="text-teal hover:underline">Data Protection Policy</a>
+            <Link to="/privacy" className="text-teal hover:underline">
+              Privacy Policy
+            </Link>
           </p>
         </div>
 

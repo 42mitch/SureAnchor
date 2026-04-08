@@ -15,6 +15,7 @@ import VisitationsPage from './pages/VisitationsPage';
 import ResidentProfilePage from './pages/ResidentProfilePage';
 import SafetyPage from './pages/SafetyPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import ContactPage from './pages/ContactPage';
 import CookieConsent from './components/CookieConsent';
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/impact" element={<ImpactPage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
