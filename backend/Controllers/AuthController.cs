@@ -95,6 +95,14 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public IActionResult GoogleSignIn()
     {
+        var clientId = _configuration["Authentication:Google:ClientId"];
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            var frontendUrl = _configuration["App:FrontendUrl"]
+                              ?? "https://zealous-tree-029394910.6.azurestaticapps.net";
+            return Redirect($"{frontendUrl}/login?error=google_failed");
+        }
+
         // After the OAuth middleware processes the Google callback at /signin-google,
         // it will redirect the browser to this action URL.
         var callbackUrl = Url.Action(nameof(GoogleCallback), "Auth", null, Request.Scheme);
