@@ -15,7 +15,6 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
-        // Password policy: 14 chars minimum, nothing else required
         options.Password.RequiredLength = 14;
         options.Password.RequireDigit = false;
         options.Password.RequireUppercase = false;
@@ -30,34 +29,12 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
-// Google OAuth — credentials loaded from app settings / Azure env vars
-// Azure env var names use double-underscore: Authentication__Google__ClientId
-var googleClientId     = builder.Configuration["Authentication:Google:ClientId"];
-var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-
-var authBuilder = builder.Services.AddAuthentication();
-
-if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
-{
-    authBuilder.AddGoogle(options =>
-    {
-        options.ClientId     = googleClientId;
-        options.ClientSecret = googleClientSecret;
-        // Google will redirect to /signin-google (the middleware's default CallbackPath).
-        // Register that full URL in Google Cloud Console as an authorised redirect URI:
-        //   Production:  https://sure-anchor.azurewebsites.net/signin-google
-        //   Local dev:   http://localhost:5022/signin-google
-    });
-}
-
-// Return 401/403 JSON instead of redirecting (required for SPA)
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.HttpOnly = true;
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
     options.SlidingExpiration = true;
 
-    // Dev: Lax + no Secure requirement (HTTP proxy works); Prod: None + Secure (cross-origin HTTPS)
     options.Cookie.SameSite = builder.Environment.IsDevelopment()
         ? SameSiteMode.Lax
         : SameSiteMode.None;
@@ -75,6 +52,21 @@ builder.Services.ConfigureApplicationCookie(options =>
         ctx.Response.StatusCode = 403;
         return Task.CompletedTask;
     };
+});
+
+// Configure HSTS for production.
+// Azure App Service terminates TLS at the load balancer, so we can't rely on
+// IsHttps being true inside the app. We configure HSTS here and let
+// UseForwardedHeaders (below) ensure the request context reflects the real
+// protocol. max-age of 1 year (31536000s) with includeSubDomains matches
+// the header set on the frontend SWA config.
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = true;
+    options.Preload = false; // Only set to true after confirming the site is
+                             // fully HTTPS-only and you want HSTS preload list
+                             // submission — this is a one-way commitment.
 });
 
 builder.Services.AddCors(options =>
@@ -107,14 +99,24 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// Respect X-Forwarded-* headers from Azure reverse proxy so cookies and redirects behave correctly.
+// Respect X-Forwarded-* headers from Azure's reverse proxy.
+// This must come before UseHsts and UseHttpsRedirection so that
+// Request.IsHttps is correctly set to true for HTTPS requests that
+// were terminated at the load balancer.
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
-// Must be first: manually stamp CORS headers so they survive even on 500 responses.
-// (ASP.NET Core's built-in CORS middleware strips headers when an unhandled exception resets the response.)
+// HSTS: only active outside of development. Because ForwardedHeaders runs
+// first, Request.IsHttps will be true for real HTTPS traffic and the
+// middleware will correctly emit the Strict-Transport-Security header.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+// Manually stamp CORS headers so they survive even on 500 responses.
 string[] corsOrigins = [
     "http://localhost:5173",
     "https://zealous-tree-029394910.6.azurestaticapps.net"
@@ -145,27 +147,6 @@ app.Use(async (ctx, next) =>
         ctx.Response.ContentType     = "application/json";
         await ctx.Response.WriteAsJsonAsync(new { error = ex.Message, detail = ex.InnerException?.Message });
     }
-});
-
-// Security headers on every response (API layer)
-app.Use(async (ctx, next) =>
-{
-    ctx.Response.Headers["Content-Security-Policy"] =
-        "default-src 'self'; " +
-        "script-src 'self'; " +
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-        "font-src 'self' https://fonts.gstatic.com; " +
-        "img-src 'self' data: blob:; " +
-        "connect-src 'self'; " +
-        "frame-ancestors 'none'; " +
-        "form-action 'self'; " +
-        "base-uri 'self'; " +
-        "object-src 'none'";
-    ctx.Response.Headers["X-Content-Type-Options"]  = "nosniff";
-    ctx.Response.Headers["X-Frame-Options"]         = "DENY";
-    ctx.Response.Headers["Referrer-Policy"]         = "strict-origin-when-cross-origin";
-    ctx.Response.Headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()";
-    await next();
 });
 
 app.UseCors("AllowFrontend");
