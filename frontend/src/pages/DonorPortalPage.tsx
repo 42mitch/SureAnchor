@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { HeartHandshake, TrendingUp, Clock, CalendarCheck, LogOut, Heart, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import AnchorLogo from '../components/AnchorLogo';
+import { HeartHandshake, TrendingUp, Clock, CalendarCheck, Heart, X } from 'lucide-react';
+import PublicLayout from '../layouts/PublicLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ValidationModal from '../components/ValidationModal';
@@ -42,13 +41,11 @@ const CAMPAIGNS = [
 ];
 
 export default function DonorPortalPage() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [impact, setImpact] = useState<ImpactAllocation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Donate modal state
   const [showDonate, setShowDonate] = useState(false);
   const [donateAmount, setDonateAmount] = useState('');
   const [donateCampaign, setDonateCampaign] = useState('General Donation');
@@ -70,34 +67,28 @@ export default function DonorPortalPage() {
 
   useEffect(() => { loadData(); }, []);
 
-  async function handleLogout() {
-    await logout();
-    navigate('/login', { replace: true });
-  }
-
   async function handleDonate(e: React.FormEvent) {
     e.preventDefault();
     const formEl = e.currentTarget as HTMLFormElement;
-    if (!formEl.checkValidity()) {
-      formEl.reportValidity();
-      return;
-    }
+    if (!formEl.checkValidity()) { formEl.reportValidity(); return; }
     setDonateError('');
     const amount = parseFloat(donateAmount);
     if (!amount || amount <= 0) {
       setValidationMsg('Please enter a donation amount greater than 0.');
       return;
     }
-
     setDonateLoading(true);
     try {
       const res = await apiFetch('/api/donations/give', {
         method: 'POST',
         body: JSON.stringify({ amount, campaignName: donateCampaign, notes: donateNotes || null }),
       });
-      if (!res.ok) { const d = await res.json(); setDonateError(d.error ?? d.message ?? 'Something went wrong.'); return; }
+      if (!res.ok) {
+        const d = await res.json();
+        setDonateError(d.error ?? d.message ?? 'Something went wrong.');
+        return;
+      }
       setDonateSuccess(true);
-      // Reload donation data after a moment
       setTimeout(() => {
         setShowDonate(false);
         setDonateSuccess(false);
@@ -113,13 +104,11 @@ export default function DonorPortalPage() {
     }
   }
 
-  const totalGiven = donations.reduce((sum, d) => sum + (d.amount ?? d.estimatedValue ?? 0), 0);
+  const totalGiven    = donations.reduce((sum, d) => sum + (d.amount ?? d.estimatedValue ?? 0), 0);
   const totalAllocated = impact.reduce((sum, i) => sum + i.amountAllocated, 0);
 
-  // Time helpers
   function formatDuration(fromDate: Date, toDate: Date = new Date()): string {
-    const diffMs = toDate.getTime() - fromDate.getTime();
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const days = Math.floor((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
     if (days < 1) return 'Today';
     if (days === 1) return '1 day';
     if (days < 30) return `${days} days`;
@@ -137,45 +126,24 @@ export default function DonorPortalPage() {
     .sort((a, b) => a.getTime() - b.getTime());
 
   const firstDonationDate = sortedDates[0];
-  const lastDonationDate = sortedDates[sortedDates.length - 1];
+  const lastDonationDate  = sortedDates[sortedDates.length - 1];
+  const timeAsDonor   = firstDonationDate ? formatDuration(firstDonationDate) : '—';
+  const timeSinceLast = lastDonationDate  ? formatDuration(lastDonationDate)  : '—';
 
-  const timeAsDonor = firstDonationDate ? formatDuration(firstDonationDate) : '—';
-  const timeSinceLast = lastDonationDate ? formatDuration(lastDonationDate) : '—';
   const programTotals = impact.reduce<Record<string, number>>((acc, a) => {
     acc[a.programArea] = (acc[a.programArea] ?? 0) + a.amountAllocated;
     return acc;
   }, {});
 
-  const donPag = useListPagination(donations, [donations.length]);
-  const impactPag = useListPagination(impact, [impact.length]);
+  const donPag    = useListPagination(donations, [donations.length]);
+  const impactPag = useListPagination(impact,    [impact.length]);
 
   return (
-    <div className="min-h-screen bg-cream font-sans">
-      {/* Nav */}
-      <nav className="bg-navy text-white px-6 py-4 flex items-center justify-between shadow-md">
-        <AnchorLogo size="sm" variant="light" />
-        <div className="flex items-center gap-4">
-          <span className="text-white/60 text-sm hidden sm:block">
-            {user?.displayName ?? user?.email}
-          </span>
-          <button
-            onClick={() => setShowDonate(true)}
-            className="flex items-center gap-2 bg-gold text-navy font-semibold px-4 py-2 rounded-xl text-sm hover:bg-gold/90 transition-colors shadow-sm"
-          >
-            <Heart size={15} strokeWidth={2.2} />
-            Donate
-          </button>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-white/60 hover:text-red-300 transition-colors text-sm"
-          >
-            <LogOut size={16} />
-            <span className="hidden sm:block">Sign Out</span>
-          </button>
-        </div>
-      </nav>
+    <PublicLayout>
+      {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
 
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+
         {/* Welcome header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -196,12 +164,12 @@ export default function DonorPortalPage() {
         {/* Summary cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Total Given', value: totalGiven, icon: HeartHandshake, color: 'text-gold', bg: 'bg-gold/10', isCurrency: true },
-            { label: 'Donations Made', value: donations.length.toString(), icon: TrendingUp, color: 'text-teal', bg: 'bg-teal/10' },
-            { label: 'Time as a Donor', value: timeAsDonor, icon: Clock, color: 'text-navy', bg: 'bg-navy/8' },
-            { label: 'Since Last Donation', value: timeSinceLast, icon: CalendarCheck, color: 'text-teal-dark', bg: 'bg-teal/8' },
+            { label: 'Total Given',         value: totalGiven,           icon: HeartHandshake, color: 'text-gold',      bg: 'bg-gold/10',  isCurrency: true },
+            { label: 'Donations Made',       value: donations.length,     icon: TrendingUp,     color: 'text-teal',      bg: 'bg-teal/10' },
+            { label: 'Time as a Donor',      value: timeAsDonor,          icon: Clock,          color: 'text-navy',      bg: 'bg-navy/8' },
+            { label: 'Since Last Donation',  value: timeSinceLast,        icon: CalendarCheck,  color: 'text-teal-dark', bg: 'bg-teal/8' },
           ].map(({ label, value, icon: Icon, color, bg, isCurrency }) => (
-            <div key={label} className="bg-white rounded-2xl shadow-sm border border-dark/6 p-5 flex items-center gap-4">
+            <div key={label} className="card flex items-center gap-4">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
                 <Icon size={22} className={color} strokeWidth={1.8} />
               </div>
@@ -228,7 +196,7 @@ export default function DonorPortalPage() {
         ) : (
           <>
             {/* Donation history */}
-            <div className="bg-white rounded-2xl shadow-sm border border-dark/6 overflow-hidden">
+            <div className="card overflow-hidden p-0">
               <div className="px-6 py-5 border-b border-dark/8 flex items-center justify-between">
                 <h2 className="font-display text-xl font-semibold text-navy">Your Donation History</h2>
                 <button
@@ -284,14 +252,9 @@ export default function DonorPortalPage() {
                     </table>
                   </div>
                   <ListPaginationBar
-                    page={donPag.page}
-                    pageCount={donPag.pageCount}
-                    pageSize={donPag.pageSize}
-                    setPage={donPag.setPage}
-                    setPageSize={donPag.setPageSize}
-                    total={donPag.total}
-                    startIndex={donPag.startIndex}
-                    endIndex={donPag.endIndex}
+                    page={donPag.page} pageCount={donPag.pageCount} pageSize={donPag.pageSize}
+                    setPage={donPag.setPage} setPageSize={donPag.setPageSize}
+                    total={donPag.total} startIndex={donPag.startIndex} endIndex={donPag.endIndex}
                   />
                 </>
               )}
@@ -299,7 +262,7 @@ export default function DonorPortalPage() {
 
             {/* Impact allocations */}
             {impact.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-dark/6 overflow-hidden">
+              <div className="card overflow-hidden p-0">
                 <div className="px-6 py-5 border-b border-dark/8 flex items-center justify-between">
                   <h2 className="font-display text-xl font-semibold text-navy">Where Your Giving Goes</h2>
                   <CurrencyDisplay
@@ -319,7 +282,8 @@ export default function DonorPortalPage() {
                           <CurrencyDisplayDetailed php={amt} className="items-end" />
                         </div>
                         <div className="w-full bg-dark/6 rounded-full h-1.5">
-                          <div className="bg-teal h-1.5 rounded-full transition-all" style={{ width: `${(amt / totalAllocated) * 100}%` }} />
+                          <div className="bg-teal h-1.5 rounded-full transition-all"
+                            style={{ width: `${(amt / totalAllocated) * 100}%` }} />
                         </div>
                       </div>
                     ))}
@@ -342,10 +306,7 @@ export default function DonorPortalPage() {
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-navy/8 text-navy">{a.programArea}</span>
                           </td>
                           <td className="px-5 py-3.5">
-                            <CurrencyDisplayDetailed
-                              php={a.amountAllocated}
-                              usdClassName="text-sm font-semibold text-teal"
-                            />
+                            <CurrencyDisplayDetailed php={a.amountAllocated} usdClassName="text-sm font-semibold text-teal" />
                           </td>
                           <td className="px-5 py-3.5 text-sm text-dark/50">{a.allocationDate}</td>
                         </tr>
@@ -354,41 +315,30 @@ export default function DonorPortalPage() {
                   </table>
                 </div>
                 <ListPaginationBar
-                  page={impactPag.page}
-                  pageCount={impactPag.pageCount}
-                  pageSize={impactPag.pageSize}
-                  setPage={impactPag.setPage}
-                  setPageSize={impactPag.setPageSize}
-                  total={impactPag.total}
-                  startIndex={impactPag.startIndex}
-                  endIndex={impactPag.endIndex}
+                  page={impactPag.page} pageCount={impactPag.pageCount} pageSize={impactPag.pageSize}
+                  setPage={impactPag.setPage} setPageSize={impactPag.setPageSize}
+                  total={impactPag.total} startIndex={impactPag.startIndex} endIndex={impactPag.endIndex}
                 />
               </div>
             )}
           </>
         )}
-
-        <footer className="text-center text-xs text-dark/30 pb-4">
-          © 2024 SureAnchor · "We have this hope as an anchor for the soul." — Hebrews 6:19
-        </footer>
       </div>
 
-      {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
-
-
-      {/* ── Donate Modal ─────────────────────────────────────────────────────── */}
+      {/* Donate Modal */}
       {showDonate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!donateLoading) setShowDonate(false); }} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => { if (!donateLoading) setShowDonate(false); }} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in overflow-hidden">
-            {/* Header */}
             <div className="bg-gradient-to-r from-navy to-teal-dark p-6 text-white">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <Heart size={20} className="text-gold" fill="currentColor" />
                   <h2 className="font-display text-xl font-bold">Make a Donation</h2>
                 </div>
-                <button onClick={() => { if (!donateLoading) setShowDonate(false); }} className="text-white/60 hover:text-white transition-colors">
+                <button onClick={() => { if (!donateLoading) setShowDonate(false); }}
+                  className="text-white/60 hover:text-white transition-colors">
                   <X size={20} />
                 </button>
               </div>
@@ -410,77 +360,49 @@ export default function DonorPortalPage() {
                     {donateError}
                   </div>
                 )}
-
-                {/* Quick amount buttons */}
                 <div>
                   <label className="block text-sm font-semibold text-dark mb-2">Donation Amount (in PHP)</label>
                   <div className="grid grid-cols-4 gap-2 mb-3">
                     {[500, 1000, 2500, 5000].map(amt => (
-                      <button
-                        key={amt}
-                        type="button"
+                      <button key={amt} type="button"
                         onClick={() => setDonateAmount(amt.toString())}
                         className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all ${
                           donateAmount === amt.toString()
                             ? 'bg-navy text-white border-navy'
                             : 'bg-white text-navy border-dark/20 hover:border-navy'
-                        }`}
-                      >
+                        }`}>
                         <div>${Math.round(phpToUsd(amt))}</div>
                         <div className="text-[10px] opacity-60">(₱{amt.toLocaleString()})</div>
                       </button>
                     ))}
                   </div>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={donateAmount}
-                    onChange={e => setDonateAmount(e.target.value)}
-                    required
+                  <input type="number" min="1" step="1" value={donateAmount}
+                    onChange={e => setDonateAmount(e.target.value)} required
                     className="w-full px-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm transition-all"
-                    placeholder="Or enter a custom amount"
-                  />
+                    placeholder="Or enter a custom amount" />
                 </div>
-
-                {/* Campaign */}
                 <div>
                   <label className="block text-sm font-semibold text-dark mb-2">Campaign</label>
-                  <select
-                    value={donateCampaign}
-                    onChange={e => setDonateCampaign(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm transition-all"
-                  >
+                  <select value={donateCampaign} onChange={e => setDonateCampaign(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm transition-all">
                     {CAMPAIGNS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-
-                {/* Notes */}
                 <div>
-                  <label className="block text-sm font-semibold text-dark mb-2">Message <span className="text-dark/35 font-normal">(optional)</span></label>
-                  <textarea
-                    value={donateNotes}
-                    onChange={e => setDonateNotes(e.target.value)}
-                    rows={2}
+                  <label className="block text-sm font-semibold text-dark mb-2">
+                    Message <span className="text-dark/35 font-normal">(optional)</span>
+                  </label>
+                  <textarea value={donateNotes} onChange={e => setDonateNotes(e.target.value)} rows={2}
                     className="w-full px-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm transition-all resize-none"
-                    placeholder="Leave a message with your donation..."
-                  />
+                    placeholder="Leave a message with your donation..." />
                 </div>
-
                 <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowDonate(false)}
-                    disabled={donateLoading}
-                    className="flex-1 py-3 rounded-xl border-2 border-dark/15 text-dark/60 font-semibold text-sm hover:border-dark/30 transition-all disabled:opacity-50"
-                  >
+                  <button type="button" onClick={() => setShowDonate(false)} disabled={donateLoading}
+                    className="flex-1 py-3 rounded-xl border-2 border-dark/15 text-dark/60 font-semibold text-sm hover:border-dark/30 transition-all disabled:opacity-50">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={donateLoading}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-navy text-white font-semibold text-sm hover:bg-navy-light transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
+                  <button type="submit" disabled={donateLoading}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-navy text-white font-semibold text-sm hover:bg-navy-light transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                     {donateLoading
                       ? <span className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
                       : <><Heart size={15} fill="currentColor" /> Donate Now</>
@@ -492,6 +414,6 @@ export default function DonorPortalPage() {
           </div>
         </div>
       )}
-    </div>
+    </PublicLayout>
   );
 }
