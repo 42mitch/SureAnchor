@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Shield, Heart, Users, ArrowRight, Anchor, Star, ChevronDown } from 'lucide-react';
 import PublicLayout from '../layouts/PublicLayout';
 import { apiFetch } from '../api';
+import SupportMissionButton from '../components/SupportMissionButton';
 
 interface PublicImpactDto {
   stats: {
@@ -102,12 +103,10 @@ export default function LandingPage() {
                 Learn About Our Impact
                 <ArrowRight size={18} />
               </Link>
-              <Link
-                to="/login"
+              <SupportMissionButton
                 className="inline-flex items-center justify-center gap-2 border-2 border-white/30 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition-all duration-200 text-base"
-              >
-                Support Our Mission
-              </Link>
+                showArrow={false}
+              />
             </div>
           </div>
         </div>
@@ -214,13 +213,9 @@ export default function LandingPage() {
             Your support provides safety, healing, and a future for young women who need it most.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              to="/login"
+            <SupportMissionButton
               className="btn-gold text-base inline-flex items-center justify-center gap-2"
-            >
-              Support Our Mission
-              <ArrowRight size={18} />
-            </Link>
+            />
             <Link
               to="/impact"
               className="inline-flex items-center justify-center gap-2 border-2 border-white/40 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition-all text-base"
