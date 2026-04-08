@@ -20,7 +20,7 @@ import CookieConsent from './components/CookieConsent';
 import ScrollToTop from './components/ScrollToTop';
 import StaffAccountsPage from './pages/StaffAccountsPage';
 import MyAccountPage from './pages/MyAccountPage';
-
+import DonorMyAccountPage from './pages/DonorMyAccountPage';
 
 function App() {
   return (
@@ -41,6 +41,11 @@ function App() {
           <Route path="/donor" element={
             <RequireAuth roles={['Donor']}>
               <DonorPortalPage />
+            </RequireAuth>
+          } />
+          <Route path="/donor/my-account" element={
+            <RequireAuth roles={['Donor']}>
+              <DonorMyAccountPage />
             </RequireAuth>
           } />
 

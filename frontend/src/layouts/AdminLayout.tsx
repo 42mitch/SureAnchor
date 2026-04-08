@@ -14,17 +14,17 @@ interface AdminLayoutProps {
 }
 
 const navItems = [
-  { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard },
-  { label: 'Caseload',         href: '/admin/caseload',          icon: Users },
-  { label: 'Process Recording',href: '/admin/process-recording', icon: FileText },
-  { label: 'Home Visitations', href: '/admin/visitations',       icon: Home },
-  { label: 'Donors',           href: '/admin/donors',            icon: HeartHandshake },
-  { label: 'Reports',          href: '/admin/reports',           icon: BarChart2 },
+  { label: 'Dashboard',         href: '/admin',                   icon: LayoutDashboard },
+  { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
+  { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
+  { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
+  { label: 'Donors',            href: '/admin/donors',            icon: HeartHandshake },
+  { label: 'Reports',           href: '/admin/reports',           icon: BarChart2 },
 ];
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const [sidebarOpen, setSidebarOpen]       = useState(false);
-  const [profileOpen, setProfileOpen]       = useState(false);
+  const [sidebarOpen, setSidebarOpen]             = useState(false);
+  const [profileOpen, setProfileOpen]             = useState(false);
   const [activeAlertsCount, setActiveAlertsCount] = useState<number>(0);
   const profileRef = useRef<HTMLDivElement>(null);
   const location   = useLocation();
@@ -92,8 +92,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
+      {/* Logo — links to public landing page */}
       <div className="px-5 py-5 border-b border-white/10">
-        <AnchorLogo size="sm" variant="light" />
+        <Link to="/" onClick={() => setSidebarOpen(false)}>
+          <AnchorLogo size="sm" variant="light" />
+        </Link>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -201,9 +204,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <Menu size={20} />
             </button>
             <div className="text-sm font-medium text-dark/50">
-              {isActive('/admin/safety') ? 'Safety Monitor'
+              {isActive('/admin/safety')        ? 'Safety Monitor'
                 : isActive('/admin/staff-accounts') ? 'Staff Accounts'
-                : isActive('/admin/my-account') ? 'My Account'
+                : isActive('/admin/my-account')     ? 'My Account'
                 : navItems.find(n => isActive(n.href))?.label || 'Admin'}
             </div>
           </div>
@@ -224,13 +227,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
               {profileOpen && (
                 <div className="absolute right-0 top-10 w-56 bg-white rounded-2xl shadow-card-hover border border-dark/8 z-50 overflow-hidden animate-fade-in">
-                  {/* User info header */}
                   <div className="px-4 py-3 border-b border-dark/8 bg-cream/60">
                     <p className="text-sm font-semibold text-navy truncate">{displayName}</p>
                     <p className="text-xs text-dark/40 truncate">{user?.email}</p>
                   </div>
-
-                  {/* Menu items */}
                   <div className="py-1.5">
                     <Link
                       to="/admin/my-account"
@@ -239,8 +239,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                       <UserCircle size={16} className="text-dark/40" strokeWidth={1.8} />
                       My Account
                     </Link>
+                    <Link
+                      to="/"
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-dark/70 hover:bg-teal/6 hover:text-navy transition-colors"
+                    >
+                      <LayoutDashboard size={16} className="text-dark/40" strokeWidth={1.8} />
+                      Public Site
+                    </Link>
                   </div>
-
                   <div className="border-t border-dark/8 py-1.5">
                     <button
                       onClick={handleLogout}
