@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, User, FileText, Home, Shield, Calendar,
   AlertTriangle, CheckCircle, Clock, ChevronRight, Activity,
-  BookOpen, Heart, MapPin, Hash, Pencil, Trash2, GraduationCap
+  BookOpen, Heart, MapPin, Hash, Pencil, Trash2, GraduationCap,
+  Stethoscope, Plus, X
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -91,6 +92,220 @@ interface EducationRecord {
   progressPercent: number | null;
   completionStatus: string;
   notes: string;
+}
+
+interface HealthRecord {
+  healthRecordId: number;
+  residentId: number;
+  recordDate: string;
+  generalHealthScore: number | null;
+  nutritionScore: number | null;
+  sleepQualityScore: number | null;
+  energyLevelScore: number | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  bmi: number | null;
+  medicalCheckupDone: boolean;
+  dentalCheckupDone: boolean;
+  psychologicalCheckupDone: boolean;
+  notes: string | null;
+}
+
+// ─── Health record modal (add / edit) ────────────────────────────────────────
+
+function HealthRecordModal({
+  residentId, record, onClose, onSaved,
+}: {
+  residentId: number;
+  record: HealthRecord | null;
+  onClose: () => void;
+  onSaved: (r: HealthRecord) => void;
+}) {
+  const isEdit = record !== null;
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    recordDate:               record?.recordDate               ?? new Date().toISOString().slice(0, 10),
+    generalHealthScore:       record?.generalHealthScore?.toString()  ?? '',
+    nutritionScore:           record?.nutritionScore?.toString()       ?? '',
+    sleepQualityScore:        record?.sleepQualityScore?.toString()    ?? '',
+    energyLevelScore:         record?.energyLevelScore?.toString()     ?? '',
+    heightCm:                 record?.heightCm?.toString()             ?? '',
+    weightKg:                 record?.weightKg?.toString()             ?? '',
+    bmi:                      record?.bmi?.toString()                  ?? '',
+    medicalCheckupDone:       record?.medicalCheckupDone       ?? false,
+    dentalCheckupDone:        record?.dentalCheckupDone        ?? false,
+    psychologicalCheckupDone: record?.psychologicalCheckupDone ?? false,
+    notes:                    record?.notes ?? '',
+  });
+
+  function set(key: string, val: string | boolean) {
+    setForm(prev => ({ ...prev, [key]: val }));
+  }
+
+  // Auto-compute BMI when height/weight change
+  function computedBmi(): string {
+    const h = parseFloat(form.heightCm);
+    const w = parseFloat(form.weightKg);
+    if (h > 0 && w > 0) {
+      return (w / Math.pow(h / 100, 2)).toFixed(1);
+    }
+    return form.bmi;
+  }
+
+  function scoreColor(val: string): string {
+    const n = parseFloat(val);
+    if (isNaN(n)) return '';
+    if (n >= 8) return 'text-green-600';
+    if (n >= 5) return 'text-yellow-600';
+    return 'text-red-500';
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    const body = {
+      residentId,
+      recordDate:               form.recordDate,
+      generalHealthScore:       form.generalHealthScore       ? parseFloat(form.generalHealthScore)       : null,
+      nutritionScore:           form.nutritionScore           ? parseFloat(form.nutritionScore)           : null,
+      sleepQualityScore:        form.sleepQualityScore        ? parseFloat(form.sleepQualityScore)        : null,
+      energyLevelScore:         form.energyLevelScore         ? parseFloat(form.energyLevelScore)         : null,
+      heightCm:                 form.heightCm                 ? parseFloat(form.heightCm)                 : null,
+      weightKg:                 form.weightKg                 ? parseFloat(form.weightKg)                 : null,
+      bmi:                      computedBmi()                  ? parseFloat(computedBmi())                 : null,
+      medicalCheckupDone:       form.medicalCheckupDone,
+      dentalCheckupDone:        form.dentalCheckupDone,
+      psychologicalCheckupDone: form.psychologicalCheckupDone,
+      notes:                    form.notes || null,
+    };
+    const url    = isEdit ? `/api/health-records/${record!.healthRecordId}` : '/api/health-records';
+    const method = isEdit ? 'PUT' : 'POST';
+    const res    = await apiFetch(url, { method, body: JSON.stringify(body) });
+    if (res.ok) {
+      const saved: HealthRecord = isEdit
+        ? { ...record!, ...body, bmi: body.bmi }
+        : { healthRecordId: (await res.json()).healthRecordId, ...body };
+      onSaved(saved);
+      onClose();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setError(d.message ?? d.error ?? 'Failed to save.');
+    }
+    setSaving(false);
+  }
+
+  const scoreField = (label: string, key: string) => (
+    <div>
+      <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">
+        {label} <span className="text-dark/30 font-normal normal-case">(1–10)</span>
+      </label>
+      <input
+        type="number" min="1" max="10" step="0.1"
+        value={(form as any)[key]}
+        onChange={e => set(key, e.target.value)}
+        className={`w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 font-semibold ${scoreColor((form as any)[key])}`}
+        placeholder="—"
+      />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto animate-fade-in">
+        <div className="sticky top-0 bg-white rounded-t-2xl px-5 py-4 border-b border-dark/8 flex items-center justify-between z-10">
+          <h3 className="font-display text-lg font-bold text-navy">
+            {isEdit ? 'Edit Health Record' : 'Add Health Record'}
+          </h3>
+          <button onClick={onClose} className="text-dark/35 hover:text-dark p-1.5 rounded-lg hover:bg-dark/6 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-5">
+          {error && (
+            <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Record Date</label>
+            <input type="date" required value={form.recordDate} onChange={e => set('recordDate', e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+          </div>
+
+          {/* Scores */}
+          <div>
+            <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-3">Wellbeing Scores (1 = poor, 10 = excellent)</p>
+            <div className="grid grid-cols-2 gap-3">
+              {scoreField('General Health', 'generalHealthScore')}
+              {scoreField('Nutrition',      'nutritionScore')}
+              {scoreField('Sleep Quality',  'sleepQualityScore')}
+              {scoreField('Energy Level',   'energyLevelScore')}
+            </div>
+          </div>
+
+          {/* Physical measurements */}
+          <div>
+            <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-3">Physical Measurements</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Height (cm)</label>
+                <input type="number" min="0" step="0.1" value={form.heightCm} onChange={e => set('heightCm', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" placeholder="—" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Weight (kg)</label>
+                <input type="number" min="0" step="0.1" value={form.weightKg} onChange={e => set('weightKg', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" placeholder="—" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">BMI</label>
+                <input type="text" readOnly value={computedBmi() || '—'}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/8 bg-dark/4 text-sm text-dark/50 cursor-default" />
+              </div>
+            </div>
+          </div>
+
+          {/* Checkups */}
+          <div>
+            <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-3">Checkups Completed This Period</p>
+            <div className="flex flex-wrap gap-4">
+              {[
+                { key: 'medicalCheckupDone',       label: 'Medical' },
+                { key: 'dentalCheckupDone',         label: 'Dental'  },
+                { key: 'psychologicalCheckupDone',  label: 'Psychological' },
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={(form as any)[key]} onChange={e => set(key, e.target.checked)}
+                    className="w-4 h-4 rounded border-dark/20 accent-teal" />
+                  <span className="text-sm font-medium text-dark/70">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Notes <span className="text-dark/35 font-normal normal-case">(optional)</span></label>
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3}
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none" />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary text-sm disabled:opacity-60">
+              {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Record'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function parseRecordDate(d: string): Date | null {
@@ -232,10 +447,11 @@ const outcomeBadge = (outcome: string) => {
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'overview', label: 'Overview', icon: User },
-  { id: 'sessions', label: 'Counseling Sessions', icon: FileText },
-  { id: 'visitations', label: 'Home Visitations', icon: Home },
-  { id: 'education', label: 'Education', icon: GraduationCap },
+  { id: 'overview',   label: 'Overview',            icon: User         },
+  { id: 'sessions',   label: 'Counseling Sessions', icon: FileText     },
+  { id: 'visitations',label: 'Home Visitations',    icon: Home         },
+  { id: 'education',  label: 'Education',            icon: GraduationCap},
+  { id: 'health',     label: 'Health & Wellbeing',  icon: Stethoscope  },
 ];
 
 function toSessionNoteRow(n: ProcessRecording): SessionNoteRow {
@@ -266,6 +482,11 @@ export default function ResidentProfilePage() {
   const [sessions, setSessions] = useState<ProcessRecording[]>([]);
   const [visitations, setVisitations] = useState<HomeVisitation[]>([]);
   const [educationRecords, setEducationRecords] = useState<EducationRecord[]>([]);
+  const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
+  const [healthModalOpen, setHealthModalOpen] = useState(false);
+  const [healthRecordToEdit, setHealthRecordToEdit] = useState<HealthRecord | null>(null);
+  const [healthDeleteTarget, setHealthDeleteTarget] = useState<HealthRecord | null>(null);
+  const [healthDeleteLoading, setHealthDeleteLoading] = useState(false);
   const [safehouses, setSafehouses] = useState<SafehouseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -327,12 +548,14 @@ export default function ResidentProfilePage() {
       apiFetch(`/api/process-recordings?residentId=${id}`).then(r => r.ok ? r.json() : []),
       apiFetch(`/api/home-visitations?residentId=${id}`).then(r => r.ok ? r.json() : []),
       apiFetch(`/api/education-records?residentId=${id}`).then(r => r.ok ? r.json() : []),
-    ]).then(([res, recs, visits, edu]) => {
+      apiFetch(`/api/health-records?residentId=${id}`).then(r => r.ok ? r.json() : []),
+    ]).then(([res, recs, visits, edu, health]) => {
       if (!res) { setNotFound(true); return; }
       setResident(res);
       setSessions(recs);
       setVisitations(visits);
       setEducationRecords(edu);
+      setHealthRecords(health);
     }).finally(() => setLoading(false));
   }, [id]);
 
@@ -368,6 +591,15 @@ export default function ResidentProfilePage() {
     setVisitations(prev => prev.filter(v => v.visitationId !== visitToDelete.visitationId));
     setVisitToDelete(null);
     setVisitDeleteLoading(false);
+  }
+
+  async function handleDeleteHealth() {
+    if (!healthDeleteTarget) return;
+    setHealthDeleteLoading(true);
+    await apiFetch(`/api/health-records/${healthDeleteTarget.healthRecordId}`, { method: 'DELETE' });
+    setHealthRecords(prev => prev.filter(r => r.healthRecordId !== healthDeleteTarget.healthRecordId));
+    setHealthDeleteTarget(null);
+    setHealthDeleteLoading(false);
   }
 
   const residentFormProps: ResidentDetailForm | null = resident
@@ -948,6 +1180,215 @@ export default function ResidentProfilePage() {
             )}
           </div>
         )}
+
+        {/* ── HEALTH & WELLBEING TAB ─────────────────────────────────────────── */}
+        {activeTab === 'health' && (
+          <div className="space-y-5">
+            {/* Header row */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-xl font-semibold text-navy">Health & Wellbeing</h2>
+                <p className="text-dark/45 text-sm mt-0.5">Monthly tracker — scores are out of 10</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => { setHealthRecordToEdit(null); setHealthModalOpen(true); }}
+                  className="btn-primary flex items-center gap-2 text-sm"
+                >
+                  <Plus size={15} /> Add Record
+                </button>
+              )}
+            </div>
+
+            {healthRecords.length === 0 ? (
+              <div className="card text-center py-16">
+                <Stethoscope size={40} className="text-dark/20 mx-auto mb-3" />
+                <p className="font-display text-lg font-semibold text-navy mb-1">No Health Records</p>
+                <p className="text-dark/45 text-sm">Health and wellbeing records will appear here once added.</p>
+              </div>
+            ) : (
+              <>
+                {/* Summary stat cards — latest record */}
+                {(() => {
+                  const latest = [...healthRecords].sort(
+                    (a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime()
+                  )[0];
+                  const scoreCard = (label: string, val: number | null, color: string) => (
+                    <div key={label} className="card text-center py-4 px-3">
+                      <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">{label}</p>
+                      {val != null ? (
+                        <>
+                          <div className={`font-display text-3xl font-bold ${val >= 8 ? 'text-green-600' : val >= 5 ? 'text-yellow-600' : 'text-red-500'}`}>
+                            {val}
+                          </div>
+                          <div className="w-full bg-dark/8 rounded-full h-1.5 mt-2">
+                            <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${val * 10}%` }} />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="font-display text-3xl font-bold text-dark/20">—</div>
+                      )}
+                    </div>
+                  );
+                  return (
+                    <div>
+                      <p className="text-xs font-semibold text-dark/35 uppercase tracking-wide mb-3">
+                        Latest record — {new Date(latest.recordDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {scoreCard('General Health', latest.generalHealthScore, 'bg-teal')}
+                        {scoreCard('Nutrition',      latest.nutritionScore,     'bg-gold')}
+                        {scoreCard('Sleep Quality',  latest.sleepQualityScore,  'bg-navy')}
+                        {scoreCard('Energy Level',   latest.energyLevelScore,   'bg-purple-500')}
+                      </div>
+                      {(latest.heightCm || latest.weightKg || latest.bmi) && (
+                        <div className="mt-3 flex flex-wrap gap-4 px-1">
+                          {latest.heightCm && <span className="text-sm text-dark/60"><span className="font-semibold text-dark">{latest.heightCm} cm</span> height</span>}
+                          {latest.weightKg && <span className="text-sm text-dark/60"><span className="font-semibold text-dark">{latest.weightKg} kg</span> weight</span>}
+                          {latest.bmi      && <span className="text-sm text-dark/60"><span className="font-semibold text-dark">BMI {latest.bmi}</span></span>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Trend chart */}
+                {healthRecords.length >= 2 && (() => {
+                  const sorted = [...healthRecords]
+                    .sort((a, b) => new Date(a.recordDate).getTime() - new Date(b.recordDate).getTime());
+                  const chartData = sorted.map(r => ({
+                    month: new Date(r.recordDate).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+                    fullDate: new Date(r.recordDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+                    general:  r.generalHealthScore,
+                    nutrition: r.nutritionScore,
+                    sleep:    r.sleepQualityScore,
+                    energy:   r.energyLevelScore,
+                  }));
+                  return (
+                    <div className="card">
+                      <h3 className="font-display text-base font-semibold text-navy mb-1">Score Trends</h3>
+                      <p className="text-dark/45 text-sm mb-4">All four wellbeing scores over time</p>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+                          <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                          <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            formatter={(val: unknown, name: unknown) => [val ?? '—', String(name)]}
+                            labelFormatter={(_, payload) => (payload?.[0]?.payload as any)?.fullDate ?? ''}
+                            contentStyle={{ borderRadius: 12, border: '1px solid rgba(0,0,0,0.06)', fontSize: 13 }}
+                          />
+                          <Line type="monotone" dataKey="general"   name="General Health" stroke="#2D8F8A" strokeWidth={2.5} dot={{ r: 4, fill: '#2D8F8A' }} connectNulls />
+                          <Line type="monotone" dataKey="nutrition"  name="Nutrition"      stroke="#D4A843" strokeWidth={2.5} dot={{ r: 4, fill: '#D4A843' }} connectNulls />
+                          <Line type="monotone" dataKey="sleep"      name="Sleep Quality"  stroke="#1B3A5C" strokeWidth={2.5} dot={{ r: 4, fill: '#1B3A5C' }} connectNulls />
+                          <Line type="monotone" dataKey="energy"     name="Energy Level"   stroke="#7c3aed" strokeWidth={2.5} dot={{ r: 4, fill: '#7c3aed' }} connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-3 px-1">
+                        {[
+                          { label: 'General Health', color: '#2D8F8A' },
+                          { label: 'Nutrition',      color: '#D4A843' },
+                          { label: 'Sleep Quality',  color: '#1B3A5C' },
+                          { label: 'Energy Level',   color: '#7c3aed' },
+                        ].map(l => (
+                          <div key={l.label} className="flex items-center gap-1.5">
+                            <div className="w-3 h-1.5 rounded-full" style={{ backgroundColor: l.color }} />
+                            <span className="text-xs text-dark/55">{l.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Monthly record cards */}
+                <div className="space-y-3">
+                  <h3 className="font-display text-base font-semibold text-navy">All Records</h3>
+                  {healthRecords.map(r => {
+                    const checkups = [
+                      r.medicalCheckupDone       && 'Medical',
+                      r.dentalCheckupDone         && 'Dental',
+                      r.psychologicalCheckupDone  && 'Psychological',
+                    ].filter(Boolean) as string[];
+                    return (
+                      <div key={r.healthRecordId} className="card">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-teal/10 flex items-center justify-center flex-shrink-0">
+                              <Stethoscope size={18} className="text-teal" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-dark text-sm">
+                                {new Date(r.recordDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                              </p>
+                              <p className="text-xs text-dark/40 mt-0.5">{r.recordDate}</p>
+                            </div>
+                          </div>
+                          {isAdmin && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => { setHealthRecordToEdit(r); setHealthModalOpen(true); }}
+                                className="p-1.5 rounded-lg text-dark/30 hover:text-teal hover:bg-teal/10 transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                onClick={() => setHealthDeleteTarget(r)}
+                                className="p-1.5 rounded-lg text-dark/30 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Score pills */}
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {[
+                            { label: 'Health',    val: r.generalHealthScore },
+                            { label: 'Nutrition', val: r.nutritionScore },
+                            { label: 'Sleep',     val: r.sleepQualityScore },
+                            { label: 'Energy',    val: r.energyLevelScore },
+                          ].filter(s => s.val != null).map(s => (
+                            <div key={s.label} className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                              (s.val! >= 8) ? 'bg-green-50 text-green-700 border-green-200'
+                              : (s.val! >= 5) ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                              : 'bg-red-50 text-red-600 border-red-200'
+                            }`}>
+                              {s.label}: {s.val}
+                            </div>
+                          ))}
+                          {(r.heightCm || r.weightKg) && (
+                            <div className="px-3 py-1 rounded-full text-xs font-semibold bg-navy/6 text-navy border border-navy/10">
+                              {r.heightCm && `${r.heightCm}cm`}{r.heightCm && r.weightKg && ' · '}{r.weightKg && `${r.weightKg}kg`}{r.bmi && ` · BMI ${r.bmi}`}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Checkups */}
+                        {checkups.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {checkups.map(c => (
+                              <span key={c} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal/10 text-teal-dark">
+                                <CheckCircle size={10} /> {c} checkup done
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {r.notes && (
+                          <p className="text-xs text-dark/50 italic mt-2 border-t border-dark/6 pt-2">"{r.notes}"</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {showEditResident && residentFormProps && safehouses.length > 0 && (
@@ -1029,6 +1470,30 @@ export default function ResidentProfilePage() {
           onConfirm={handleDeleteVisit}
           onCancel={() => setVisitToDelete(null)}
           loading={visitDeleteLoading}
+        />
+      )}
+      {healthModalOpen && resident && (
+        <HealthRecordModal
+          residentId={resident.residentId}
+          record={healthRecordToEdit}
+          onClose={() => { setHealthModalOpen(false); setHealthRecordToEdit(null); }}
+          onSaved={saved => {
+            setHealthRecords(prev => {
+              const exists = prev.find(r => r.healthRecordId === saved.healthRecordId);
+              return exists
+                ? prev.map(r => r.healthRecordId === saved.healthRecordId ? saved : r)
+                : [saved, ...prev];
+            });
+          }}
+        />
+      )}
+      {healthDeleteTarget && (
+        <ConfirmDeleteModal
+          title="Delete health record"
+          description={`Permanently delete the health record for ${new Date(healthDeleteTarget.recordDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}? This cannot be undone.`}
+          onConfirm={handleDeleteHealth}
+          onCancel={() => setHealthDeleteTarget(null)}
+          loading={healthDeleteLoading}
         />
       )}
     </AdminLayout>
