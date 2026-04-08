@@ -78,4 +78,4 @@ backend/Data/csv/
 backend/Data/*.csv
 
 # Python env
-backend/Data/.env
+backend/Data/.envbackend/Controllers/SeedController.cs
