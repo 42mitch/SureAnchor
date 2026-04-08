@@ -82,7 +82,6 @@ public class SupportersController : ControllerBase
     {
         var supporter = new Supporter
         {
-            SupporterId = (_db.Supporters.Any() ? _db.Supporters.Max(s => s.SupporterId) : 0) + 1,
             DisplayName = dto.DisplayName,
             SupporterType = dto.SupporterType,
             FirstName = dto.FirstName,
@@ -91,7 +90,7 @@ public class SupportersController : ControllerBase
             Email = dto.Email,
             Phone = dto.Phone,
             Country = dto.Country,
-            Status = dto.Status,
+            Status = dto.Status ?? "Active",
             AcquisitionChannel = dto.AcquisitionChannel,
             CreatedAt = DateTime.UtcNow,
         };
@@ -115,7 +114,7 @@ public class SupportersController : ControllerBase
         supporter.Email = dto.Email;
         supporter.Phone = dto.Phone;
         supporter.Country = dto.Country;
-        supporter.Status = dto.Status;
+        supporter.Status = dto.Status ?? supporter.Status;
         supporter.AcquisitionChannel = dto.AcquisitionChannel;
 
         await _db.SaveChangesAsync();
@@ -181,6 +180,10 @@ public record SupporterDonationDto(
     string? Notes
 );
 
+// Status is nullable to satisfy .NET 10's stricter validation metadata rules
+// for record primary constructors — [property: Required] on a non-nullable
+// string in a record DTO causes a 500 in .NET 10. Controllers default to
+// "Active" when null is received.
 public record SupporterWriteDto(
     [property: Required, StringLength(120)] string DisplayName,
     [property: Required] string SupporterType,
@@ -192,6 +195,6 @@ public record SupporterWriteDto(
     [property: EmailAddress] string? Email,
     string? Phone,
     string? Country,
-    [property: Required] string Status,
+    string? Status,
     string? AcquisitionChannel
 );
