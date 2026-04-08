@@ -22,6 +22,12 @@ const CustomTooltipPeso = ({ active, payload, label }: any) => {
 
 export default function ReportsPage() {
   const shPag = useListPagination(safehousePerformance, []);
+  const healthToFive = (scoreOutOf100: number) => Math.round((scoreOutOf100 / 20) * 10) / 10;
+  const avgHealthOutOfFive = residentOutcomes.length
+    ? healthToFive(
+      residentOutcomes.reduce((sum, row) => sum + row.health, 0) / residentOutcomes.length
+    )
+    : 0;
 
   return (
     <AdminLayout>
@@ -36,7 +42,7 @@ export default function ReportsPage() {
         <div className="grid sm:grid-cols-3 gap-4">
           {[
             { label: 'Reintegration Success Rate', value: '89%', sub: '+3% vs last year', color: 'text-teal', bg: 'from-teal to-teal-dark' },
-            { label: 'Avg. Health Score', value: '75.5', sub: 'Across all safe houses', color: 'text-navy', bg: 'from-navy to-navy-light' },
+            { label: 'Avg. Health Score', value: `${avgHealthOutOfFive} / 5`, sub: 'Across all safe houses', color: 'text-navy', bg: 'from-navy to-navy-light' },
             { label: 'Avg. Education Progress', value: '71.75%', sub: 'Curriculum completion rate', color: 'text-gold', bg: 'from-yellow-600 to-gold' },
           ].map(({ label, value, sub, bg }) => (
             <div key={label} className={`rounded-2xl bg-gradient-to-br ${bg} text-white p-6`}>
@@ -88,14 +94,17 @@ export default function ReportsPage() {
         <div className="grid md:grid-cols-2 gap-6">
           <div className="card">
             <h2 className="font-display text-lg font-semibold text-navy mb-1">Health Scores by Safehouse</h2>
-            <p className="text-dark/45 text-sm mb-5">Average score out of 100</p>
+            <p className="text-dark/45 text-sm mb-5">Average score out of 5</p>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={residentOutcomes} barSize={28}>
+              <BarChart
+                data={residentOutcomes.map((r) => ({ ...r, healthOutOfFive: healthToFive(r.health) }))}
+                barSize={28}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
                 <XAxis dataKey="safehouse" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} domain={[0, 100]} />
+                <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} domain={[0, 5]} />
                 <Tooltip />
-                <Bar dataKey="health" name="Health Score" fill="#2D8F8A" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="healthOutOfFive" name="Health Score" fill="#2D8F8A" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -140,7 +149,7 @@ export default function ReportsPage() {
                         <div className="w-20 bg-dark/8 rounded-full h-1.5">
                           <div className="bg-teal h-1.5 rounded-full" style={{ width: `${sh.healthScore}%` }} />
                         </div>
-                        <span className="text-sm font-semibold text-dark">{sh.healthScore}</span>
+                        <span className="text-sm font-semibold text-dark">{healthToFive(sh.healthScore)} / 5</span>
                       </div>
                     </td>
                     <td className="px-5 py-4">
