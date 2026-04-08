@@ -1,4 +1,4 @@
-import { formatCurrencyDetailed, formatUsdK, formatPhpK, phpToUsd } from '../utils/currency';
+import { formatUsdK, formatPhpK, phpToUsd } from '../utils/currency';
 
 /**
  * Stacked vertical currency display component
