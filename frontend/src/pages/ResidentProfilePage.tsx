@@ -111,6 +111,17 @@ interface HealthRecord {
   notes: string | null;
 }
 
+function toHealthScoreOutOfFive(value: number | null | undefined): number | null {
+  if (value == null || Number.isNaN(value)) return null;
+  // Support legacy 10-point data while standardizing UI to 5-point.
+  return value > 5 ? Math.round((value / 2) * 10) / 10 : value;
+}
+
+function formatHealthScore(value: number | null | undefined): string {
+  const scaled = toHealthScoreOutOfFive(value);
+  return scaled == null ? '' : String(Math.round(scaled * 10) / 10);
+}
+
 // ─── Health record modal (add / edit) ────────────────────────────────────────
 
 function HealthRecordModal({
@@ -126,10 +137,10 @@ function HealthRecordModal({
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     recordDate:               record?.recordDate               ?? new Date().toISOString().slice(0, 10),
-    generalHealthScore:       record?.generalHealthScore?.toString()  ?? '',
-    nutritionScore:           record?.nutritionScore?.toString()       ?? '',
-    sleepQualityScore:        record?.sleepQualityScore?.toString()    ?? '',
-    energyLevelScore:         record?.energyLevelScore?.toString()     ?? '',
+    generalHealthScore:       formatHealthScore(record?.generalHealthScore),
+    nutritionScore:           formatHealthScore(record?.nutritionScore),
+    sleepQualityScore:        formatHealthScore(record?.sleepQualityScore),
+    energyLevelScore:         formatHealthScore(record?.energyLevelScore),
     heightCm:                 record?.heightCm?.toString()             ?? '',
     weightKg:                 record?.weightKg?.toString()             ?? '',
     bmi:                      record?.bmi?.toString()                  ?? '',
@@ -156,8 +167,8 @@ function HealthRecordModal({
   function scoreColor(val: string): string {
     const n = parseFloat(val);
     if (isNaN(n)) return '';
-    if (n >= 8) return 'text-green-600';
-    if (n >= 5) return 'text-yellow-600';
+    if (n >= 4) return 'text-green-600';
+    if (n >= 2.5) return 'text-yellow-600';
     return 'text-red-500';
   }
 
@@ -202,7 +213,7 @@ function HealthRecordModal({
         {label} <span className="text-dark/30 font-normal normal-case">(1–10)</span>
       </label>
       <input
-        type="number" min="1" max="10" step="0.1"
+        type="number" min="1" max="5" step="0.1"
         value={(form as any)[key]}
         onChange={e => set(key, e.target.value)}
         className={`w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 font-semibold ${scoreColor((form as any)[key])}`}
@@ -237,7 +248,7 @@ function HealthRecordModal({
 
           {/* Scores */}
           <div>
-            <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-3">Wellbeing Scores (1 = poor, 10 = excellent)</p>
+            <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-3">Wellbeing Scores (1 = poor, 5 = excellent)</p>
             <div className="grid grid-cols-2 gap-3">
               {scoreField('General Health', 'generalHealthScore')}
               {scoreField('Nutrition',      'nutritionScore')}
@@ -1382,7 +1393,7 @@ export default function ResidentProfilePage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-display text-xl font-semibold text-navy">Health & Wellbeing</h2>
-                <p className="text-dark/45 text-sm mt-0.5">Monthly tracker — scores are out of 10</p>
+                <p className="text-dark/45 text-sm mt-0.5">Monthly tracker — scores are out of 5</p>
               </div>
               {isAdmin && (
                 <button
@@ -1412,11 +1423,11 @@ export default function ResidentProfilePage() {
                       <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">{label}</p>
                       {val != null ? (
                         <>
-                          <div className={`font-display text-3xl font-bold ${val >= 8 ? 'text-green-600' : val >= 5 ? 'text-yellow-600' : 'text-red-500'}`}>
-                            {val}
+                          <div className={`font-display text-3xl font-bold ${toHealthScoreOutOfFive(val)! >= 4 ? 'text-green-600' : toHealthScoreOutOfFive(val)! >= 2.5 ? 'text-yellow-600' : 'text-red-500'}`}>
+                            {formatHealthScore(val)}
                           </div>
                           <div className="w-full bg-dark/8 rounded-full h-1.5 mt-2">
-                            <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${val * 10}%` }} />
+                            <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${(toHealthScoreOutOfFive(val) ?? 0) * 20}%` }} />
                           </div>
                         </>
                       ) : (
@@ -1453,10 +1464,10 @@ export default function ResidentProfilePage() {
                   const chartData = sorted.map(r => ({
                     month: new Date(r.recordDate).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
                     fullDate: new Date(r.recordDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-                    general:  r.generalHealthScore,
-                    nutrition: r.nutritionScore,
-                    sleep:    r.sleepQualityScore,
-                    energy:   r.energyLevelScore,
+                    general:  toHealthScoreOutOfFive(r.generalHealthScore),
+                    nutrition: toHealthScoreOutOfFive(r.nutritionScore),
+                    sleep:    toHealthScoreOutOfFive(r.sleepQualityScore),
+                    energy:   toHealthScoreOutOfFive(r.energyLevelScore),
                   }));
                   return (
                     <div className="card">
@@ -1466,9 +1477,12 @@ export default function ResidentProfilePage() {
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
                           <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                          <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                          <YAxis domain={[0, 5]} tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
                           <Tooltip
-                            formatter={(val: unknown, name: unknown) => [String(val ?? '—'), String(name)]}
+                            formatter={(val: unknown, name: unknown) => {
+                              const n = typeof val === 'number' ? val : Number(val);
+                              return !Number.isNaN(n) ? [`${n} / 5`, String(name)] : ['—', String(name)];
+                            }}
                             labelFormatter={(_, payload) => (payload?.[0]?.payload as any)?.fullDate ?? ''}
                             contentStyle={{ borderRadius: 12, border: '1px solid rgba(0,0,0,0.06)', fontSize: 13 }}
                           />
@@ -1547,11 +1561,11 @@ export default function ResidentProfilePage() {
                             { label: 'Energy',    val: r.energyLevelScore },
                           ].filter(s => s.val != null).map(s => (
                             <div key={s.label} className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                              (s.val! >= 8) ? 'bg-green-50 text-green-700 border-green-200'
-                              : (s.val! >= 5) ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                              (toHealthScoreOutOfFive(s.val)! >= 4) ? 'bg-green-50 text-green-700 border-green-200'
+                              : (toHealthScoreOutOfFive(s.val)! >= 2.5) ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
                               : 'bg-red-50 text-red-600 border-red-200'
                             }`}>
-                              {s.label}: {s.val}
+                              {s.label}: {formatHealthScore(s.val)} / 5
                             </div>
                           ))}
                           {(r.heightCm || r.weightKg) && (
@@ -1834,3 +1848,7 @@ export default function ResidentProfilePage() {
     </AdminLayout>
   );
 }
+
+
+
+
