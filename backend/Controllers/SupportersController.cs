@@ -1,6 +1,5 @@
 using Backend.Data;
 using Backend.Models;
-using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -184,15 +183,16 @@ public record SupporterDonationDto(
 // for record primary constructors — [property: Required] on a non-nullable
 // string in a record DTO causes a 500 in .NET 10. Controllers default to
 // "Active" when null is received.
+// Note: [property: ...] data annotation attributes on record primary constructor
+// parameters are not supported in .NET 10 and cause 500 errors. Validation is
+// handled on the frontend instead.
 public record SupporterWriteDto(
-    [property: Required, StringLength(120)] string DisplayName,
-    [property: Required] string SupporterType,
-    [property: RegularExpression(@"^[A-Za-z\s'\-]+$", ErrorMessage = "FirstName can only contain letters, spaces, apostrophes, or hyphens.")]
+    string DisplayName,
+    string SupporterType,
     string? FirstName,
-    [property: RegularExpression(@"^[A-Za-z\s'\-]+$", ErrorMessage = "LastName can only contain letters, spaces, apostrophes, or hyphens.")]
     string? LastName,
     string? OrganizationName,
-    [property: EmailAddress] string? Email,
+    string? Email,
     string? Phone,
     string? Country,
     string? Status,
