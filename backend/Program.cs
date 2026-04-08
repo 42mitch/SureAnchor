@@ -127,6 +127,27 @@ app.Use(async (ctx, next) =>
     }
 });
 
+// Security headers on every response (API layer)
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["Content-Security-Policy"] =
+        "default-src 'self'; " +
+        "script-src 'self'; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "font-src 'self' https://fonts.gstatic.com; " +
+        "img-src 'self' data: blob:; " +
+        "connect-src 'self'; " +
+        "frame-ancestors 'none'; " +
+        "form-action 'self'; " +
+        "base-uri 'self'; " +
+        "object-src 'none'";
+    ctx.Response.Headers["X-Content-Type-Options"]  = "nosniff";
+    ctx.Response.Headers["X-Frame-Options"]         = "DENY";
+    ctx.Response.Headers["Referrer-Policy"]         = "strict-origin-when-cross-origin";
+    ctx.Response.Headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
+
 app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
 app.UseAuthentication();
