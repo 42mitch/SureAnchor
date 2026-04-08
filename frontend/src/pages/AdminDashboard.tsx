@@ -146,7 +146,7 @@
 
 // NEW DASHBOARD DESIGN
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Users, HeartHandshake, Home, ChevronDown, ChevronUp,
   UserPlus, Heart, Calendar, Activity, AlertTriangle,
@@ -194,6 +194,8 @@ interface DonationDto {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const RISK_LEVELS = ['Low', 'Medium', 'High', 'Critical'] as const;
 
 const RISK_COLORS: Record<string, string> = {
   Low: '#16a34a',
@@ -282,6 +284,7 @@ function StatCard({ label, value, sub, color = 'bg-teal/10 text-teal', icon: Ico
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [residents, setResidents] = useState<ResidentListDto[]>([]);
   const [donations, setDonations] = useState<DonationDto[]>([]);
   const [loadingResidents, setLoadingResidents] = useState(true);
@@ -317,9 +320,18 @@ export default function AdminDashboard() {
     acc[r.risk] = (acc[r.risk] || 0) + 1;
     return acc;
   }, {});
-  const riskData = ['Low', 'Medium', 'High', 'Critical'].map(k => ({
+  const riskData = RISK_LEVELS.map(k => ({
     name: k, value: riskCounts[k] || 0, color: RISK_COLORS[k],
   }));
+
+  function goToCaseloadByRisk(risk: string) {
+    if (RISK_LEVELS.includes(risk as (typeof RISK_LEVELS)[number])) {
+      const q = new URLSearchParams();
+      q.set('risk', risk);
+      q.set('status', 'Active');
+      navigate(`/admin/caseload?${q.toString()}`);
+    }
+  }
 
   const categoryMap: Record<string, number> = {};
   activeResidents.forEach(r => {
@@ -540,13 +552,18 @@ export default function AdminDashboard() {
                   Active Resident Risk Levels
                 </h3>
                 <div className="flex items-center gap-6">
-                  <ResponsiveContainer width={160} height={160}>
+                  <ResponsiveContainer width={160} height={160} className="[&_svg]:outline-none">
                     <PieChart>
                       <Pie
                         data={riskData}
                         cx="50%" cy="50%"
                         innerRadius={48} outerRadius={72}
                         paddingAngle={3} dataKey="value"
+                        style={{ cursor: 'pointer' }}
+                        onClick={(sector) => {
+                          const name = sector?.name != null ? String(sector.name) : '';
+                          goToCaseloadByRisk(name);
+                        }}
                       >
                         {riskData.map((entry, i) => (
                           <Cell key={i} fill={entry.color} />
@@ -557,13 +574,18 @@ export default function AdminDashboard() {
                   </ResponsiveContainer>
                   <div className="space-y-2 flex-1">
                     {riskData.map(item => (
-                      <div key={item.name} className="flex items-center justify-between">
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => goToCaseloadByRisk(item.name)}
+                        className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-navy/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                      >
                         <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
                           <span className="text-dark/60 text-xs font-medium">{item.name}</span>
                         </div>
                         <span className="font-bold text-dark text-xs">{item.value}</span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
