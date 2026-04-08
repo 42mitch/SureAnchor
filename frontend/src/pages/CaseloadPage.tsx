@@ -21,6 +21,18 @@ interface Resident {
   worker: string;
   religion: string | null;
   dateAdmitted: string | null;
+  isPwd: boolean;
+  pwdType: string | null;
+  hasSpecialNeeds: boolean;
+  specialNeedsDiagnosis: string | null;
+  familyIs4Ps: boolean;
+  familySoloParent: boolean;
+  familyIndigenous: boolean;
+  familyInformalSettler: boolean;
+  referralSource: string | null;
+  referringAgencyPerson: string | null;
+  reintegrationType: string | null;
+  reintegrationStatus: string | null;
 }
 
 const riskBadge = (risk: string) => {
@@ -56,6 +68,10 @@ export default function CaseloadPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [riskFilter, setRiskFilter] = useState('');
+  const [safehouseFilter, setSafehouseFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [reintegrationFilter, setReintegrationFilter] = useState('');
+  const [disabilityFilter, setDisabilityFilter] = useState('');
   const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Resident | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -96,14 +112,26 @@ export default function CaseloadPage() {
   const filtered = residents.filter(r => {
     const matchSearch = !search ||
       r.caseNo.toLowerCase().includes(search.toLowerCase()) ||
+      r.internalCode.toLowerCase().includes(search.toLowerCase()) ||
       r.worker.toLowerCase().includes(search.toLowerCase()) ||
-      r.safehouse.toLowerCase().includes(search.toLowerCase());
+      r.safehouse.toLowerCase().includes(search.toLowerCase()) ||
+      (r.referralSource ?? '').toLowerCase().includes(search.toLowerCase());
     const matchStatus = !statusFilter || r.status === statusFilter;
     const matchRisk = !riskFilter || r.risk === riskFilter;
-    return matchSearch && matchStatus && matchRisk;
+    const matchSafehouse = !safehouseFilter || r.safehouse === safehouseFilter;
+    const matchCategory = !categoryFilter || r.category === categoryFilter;
+    const matchReintegration = !reintegrationFilter || (r.reintegrationStatus ?? '') === reintegrationFilter;
+    const matchDisability =
+      !disabilityFilter ||
+      (disabilityFilter === 'PWD' && r.isPwd) ||
+      (disabilityFilter === 'SpecialNeeds' && r.hasSpecialNeeds);
+    return matchSearch && matchStatus && matchRisk && matchSafehouse && matchCategory && matchReintegration && matchDisability;
   });
 
-  const caseloadPag = useListPagination(filtered, [search, statusFilter, riskFilter]);
+  const caseloadPag = useListPagination(filtered, [search, statusFilter, riskFilter, safehouseFilter, categoryFilter, reintegrationFilter, disabilityFilter]);
+  const safehouseOptions = [...new Set(residents.map(r => r.safehouse).filter(Boolean))].sort();
+  const categoryOptions = [...new Set(residents.map(r => r.category).filter(Boolean))].sort();
+  const reintegrationOptions = [...new Set(residents.map(r => r.reintegrationStatus).filter(Boolean))].sort();
 
   return (
     <AdminLayout>
@@ -125,7 +153,7 @@ export default function CaseloadPage() {
 
         {/* Filter bar */}
         <div className="card py-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
               <input
@@ -175,6 +203,39 @@ export default function CaseloadPage() {
             >
               <option value="">Risk Level</option>
               {RISK_LEVELS.map(o => <option key={o}>{o}</option>)}
+            </select>
+            <select
+              value={safehouseFilter}
+              onChange={e => setSafehouseFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
+            >
+              <option value="">Safehouse</option>
+              {safehouseOptions.map(o => <option key={o}>{o}</option>)}
+            </select>
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
+            >
+              <option value="">Case Category</option>
+              {categoryOptions.map(o => <option key={o}>{o}</option>)}
+            </select>
+            <select
+              value={reintegrationFilter}
+              onChange={e => setReintegrationFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
+            >
+              <option value="">Reintegration</option>
+              {reintegrationOptions.map(o => <option key={o}>{o}</option>)}
+            </select>
+            <select
+              value={disabilityFilter}
+              onChange={e => setDisabilityFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
+            >
+              <option value="">Disability</option>
+              <option value="PWD">PWD</option>
+              <option value="SpecialNeeds">Special Needs</option>
             </select>
           </div>
         </div>
@@ -279,6 +340,16 @@ export default function CaseloadPage() {
                     ['Date Admitted', selectedResident.dateAdmitted ?? '—'],
                     ['Social Worker', selectedResident.worker || '—'],
                     ['Status', selectedResident.status],
+                    ['Disability (PWD)', selectedResident.isPwd ? `Yes${selectedResident.pwdType ? ` — ${selectedResident.pwdType}` : ''}` : 'No'],
+                    ['Special Needs', selectedResident.hasSpecialNeeds ? `Yes${selectedResident.specialNeedsDiagnosis ? ` — ${selectedResident.specialNeedsDiagnosis}` : ''}` : 'No'],
+                    ['4Ps Beneficiary', selectedResident.familyIs4Ps ? 'Yes' : 'No'],
+                    ['Solo Parent Family', selectedResident.familySoloParent ? 'Yes' : 'No'],
+                    ['Indigenous Group', selectedResident.familyIndigenous ? 'Yes' : 'No'],
+                    ['Informal Settler', selectedResident.familyInformalSettler ? 'Yes' : 'No'],
+                    ['Referral Source', selectedResident.referralSource || '—'],
+                    ['Referring Agency/Person', selectedResident.referringAgencyPerson || '—'],
+                    ['Reintegration Type', selectedResident.reintegrationType || '—'],
+                    ['Reintegration Status', selectedResident.reintegrationStatus || '—'],
                   ].map(([label, value]) => (
                     <div key={String(label)}>
                       <p className="text-xs text-dark/40 font-medium mb-0.5">{label}</p>
@@ -388,6 +459,18 @@ function AddResidentModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
         risk: form.currentRiskLevel, status: form.caseStatus,
         worker: form.assignedSocialWorker, religion: form.religion || null,
         dateAdmitted: form.dateOfAdmission || null,
+        isPwd: false,
+        pwdType: null,
+        hasSpecialNeeds: false,
+        specialNeedsDiagnosis: null,
+        familyIs4Ps: false,
+        familySoloParent: false,
+        familyIndigenous: false,
+        familyInformalSettler: false,
+        referralSource: null,
+        referringAgencyPerson: null,
+        reintegrationType: null,
+        reintegrationStatus: null,
       };
       onSaved(newResident);
     }

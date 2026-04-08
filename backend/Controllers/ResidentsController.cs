@@ -46,7 +46,19 @@ public class ResidentsController : ControllerBase
                 r.CaseStatus,
                 r.AssignedSocialWorker ?? string.Empty,
                 r.Religion,
-                r.DateOfAdmission
+                r.DateOfAdmission,
+                r.IsPwd,
+                r.PwdType,
+                r.HasSpecialNeeds,
+                r.SpecialNeedsDiagnosis,
+                r.FamilyIs4Ps,
+                r.FamilySoloParent,
+                r.FamilyIndigenous,
+                r.FamilyInformalSettler,
+                r.ReferralSource,
+                r.ReferringAgencyPerson,
+                r.ReintegrationType,
+                r.ReintegrationStatus
             ))
             .ToListAsync();
         return Ok(list);
@@ -189,7 +201,19 @@ public record ResidentListDto(
     string Status,
     string Worker,
     string? Religion,
-    DateOnly? DateAdmitted
+    DateOnly? DateAdmitted,
+    bool IsPwd,
+    string? PwdType,
+    bool HasSpecialNeeds,
+    string? SpecialNeedsDiagnosis,
+    bool FamilyIs4Ps,
+    bool FamilySoloParent,
+    bool FamilyIndigenous,
+    bool FamilyInformalSettler,
+    string? ReferralSource,
+    string? ReferringAgencyPerson,
+    string? ReintegrationType,
+    string? ReintegrationStatus
 );
 
 public record ResidentDetailDto(
