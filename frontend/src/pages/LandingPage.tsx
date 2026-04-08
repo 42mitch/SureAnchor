@@ -1,13 +1,17 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, Heart, Users, ArrowRight, Anchor, Star, ChevronDown } from 'lucide-react';
 import PublicLayout from '../layouts/PublicLayout';
+import { apiFetch } from '../api';
 
-const stats = [
-  { value: '47', label: 'Girls Currently in Safe Homes', icon: Shield },
-  { value: '312', label: 'Girls Served Since Founding', icon: Users },
-  { value: '89%', label: 'Reintegration Success Rate', icon: Heart },
-  { value: '8', label: 'Active Safe Houses', icon: Anchor },
-];
+interface PublicImpactDto {
+  stats: {
+    currentlyInCare: number;
+    totalServed: number;
+    reintegrationSuccessRate: number;
+    activeSafehouses: number;
+  };
+}
 
 const pillars = [
   {
@@ -34,18 +38,48 @@ const pillars = [
 ];
 
 export default function LandingPage() {
+  const [impact, setImpact] = useState<PublicImpactDto | null>(null);
+
+  useEffect(() => {
+    apiFetch('/api/public/impact')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setImpact(data); })
+      .catch(() => {}); // fail silently — page still renders with fallback dashes
+  }, []);
+
+  const stats = [
+    {
+      value: impact ? String(impact.stats.currentlyInCare) : '—',
+      label: 'Girls Currently in Safe Homes',
+      icon: Shield,
+    },
+    {
+      value: impact ? String(impact.stats.totalServed) : '—',
+      label: 'Girls Served Since Founding',
+      icon: Users,
+    },
+    {
+      value: impact ? `${impact.stats.reintegrationSuccessRate}%` : '—',
+      label: 'Reintegration Success Rate',
+      icon: Heart,
+    },
+    {
+      value: impact ? String(impact.stats.activeSafehouses) : '—',
+      label: 'Active Safe Houses',
+      icon: Anchor,
+    },
+  ];
+
   return (
     <PublicLayout>
       {/* Hero */}
       <section className="relative min-h-[92vh] flex items-center overflow-hidden bg-gradient-to-br from-navy via-navy-light to-teal-dark">
-        {/* Decorative circles */}
         <div className="absolute top-20 right-10 w-80 h-80 rounded-full bg-teal/10 blur-3xl" />
         <div className="absolute bottom-10 left-0 w-96 h-96 rounded-full bg-gold/8 blur-3xl" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-white/5" />
 
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="max-w-3xl">
-            {/* Badge */}
             <div className="inline-flex items-center gap-2 bg-white/10 text-white/80 text-xs font-semibold px-4 py-2 rounded-full mb-8 border border-white/15 backdrop-blur-sm">
               <Star size={12} className="text-gold" fill="currentColor" />
               Serving survivors since 2016 · Philippines
@@ -68,14 +102,16 @@ export default function LandingPage() {
                 Learn About Our Impact
                 <ArrowRight size={18} />
               </a>
-              <a href="#mission" className="inline-flex items-center justify-center gap-2 border-2 border-white/30 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition-all duration-200 text-base">
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center gap-2 border-2 border-white/30 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition-all duration-200 text-base"
+              >
                 Support Our Mission
-              </a>
+              </Link>
             </div>
           </div>
         </div>
 
-        {/* Scroll cue */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/30 animate-bounce">
           <span className="text-xs tracking-widest uppercase">Scroll</span>
           <ChevronDown size={16} />
@@ -178,11 +214,17 @@ export default function LandingPage() {
             Your support provides safety, healing, and a future for young women who need it most.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="#" className="btn-gold text-base inline-flex items-center justify-center gap-2">
+            <Link
+              to="/login"
+              className="btn-gold text-base inline-flex items-center justify-center gap-2"
+            >
               Support Our Mission
               <ArrowRight size={18} />
-            </a>
-            <Link to="/impact" className="inline-flex items-center justify-center gap-2 border-2 border-white/40 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition-all text-base">
+            </Link>
+            <Link
+              to="/impact"
+              className="inline-flex items-center justify-center gap-2 border-2 border-white/40 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition-all text-base"
+            >
               View Impact Report
             </Link>
           </div>
