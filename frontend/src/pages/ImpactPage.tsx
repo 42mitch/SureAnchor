@@ -99,17 +99,25 @@ export default function ImpactPage() {
             { icon: Home, value: s?.activeSafehouses, label: 'Active Safe Houses', color: 'text-teal' },
             {
               icon: HeartHandshake,
-              value: s ? `₱${Math.round(s.totalDonatedPhp / 1000)}K` : undefined,
-              label: 'Total Donated (PHP)',
+              value: s?.totalDonatedPhp,
+              label: 'Total Donated',
               color: 'text-gold',
+              isCurrency: true,
             },
-          ].map(({ icon: Icon, value, label, color }) => (
+          ].map(({ icon: Icon, value, label, color, isCurrency }) => (
             <div key={label} className="card flex flex-col items-center text-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-navy/5 flex items-center justify-center">
                 <Icon size={22} className={color} strokeWidth={1.8} />
               </div>
               {loading || value === undefined ? (
                 <div className="h-8 w-16 bg-dark/10 rounded-lg animate-pulse" />
+              ) : isCurrency ? (
+                <CurrencyDisplay
+                  php={value as number}
+                  className="items-center"
+                  usdClassName={`font-display text-3xl font-bold ${color}`}
+                  phpClassName="text-xs text-dark/30 font-normal mt-0.5"
+                />
               ) : (
                 <div className={`font-display text-3xl font-bold ${color}`}>{value}</div>
               )}
@@ -146,7 +154,7 @@ export default function ImpactPage() {
           <Heart size={28} className="text-white/80 mb-3" strokeWidth={1.5} />
           <h3 className="font-display text-2xl font-bold mb-3">Your donations make this possible</h3>
           <p className="text-white/75 text-sm leading-relaxed mb-6">
-            ₱5,000 provides one month of counseling for a survivor. ₱15,000 covers educational materials for a safe house for a term. Every peso anchors a young woman&apos;s hope.
+            $86 (₱5,000) provides one month of counseling for a survivor. $258 (₱15,000) covers educational materials for a safe house for a term. Every dollar anchors a young woman&apos;s hope.
           </p>
           <SupportMissionButton
             className="inline-flex items-center gap-2 bg-white text-teal font-semibold px-5 py-2.5 rounded-lg hover:bg-gold hover:text-navy transition-all text-sm"
