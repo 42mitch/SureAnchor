@@ -18,6 +18,7 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ContactPage from './pages/ContactPage';
 import CookieConsent from './components/CookieConsent';
 import ScrollToTop from './components/ScrollToTop';
+import StaffAccountsPage from './pages/StaffAccountsPage';
 
 function App() {
   return (
@@ -82,6 +83,11 @@ function App() {
           <Route path="/admin/safety" element={
             <RequireAuth roles={['Admin']}>
               <SafetyPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/staff-accounts" element={
+            <RequireAuth roles={['Admin']}>
+              <StaffAccountsPage />
             </RequireAuth>
           } />
         </Routes>

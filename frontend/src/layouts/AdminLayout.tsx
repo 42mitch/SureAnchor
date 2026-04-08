@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, Home, HeartHandshake,
-  BarChart2, Settings, LogOut, Menu, ChevronRight, ShieldAlert
+  BarChart2, Settings, LogOut, Menu, ChevronRight, ShieldAlert, UserCog
 } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
@@ -99,24 +99,39 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
         {/* Admin-only: Safety Overview */}
         {user?.roles.includes('Admin') && (
-          <Link
-            to="/admin/safety"
-            onClick={() => setSidebarOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group ${
-              isActive('/admin/safety')
-                ? 'bg-red-500/20 text-red-200 shadow-sm'
-                : 'text-red-300/70 hover:text-red-200 hover:bg-red-500/10'
-            }`}
-          >
-            <ShieldAlert size={18} strokeWidth={isActive('/admin/safety') ? 2.2 : 1.8} />
-            <span className="flex-1">Safety Monitor</span>
-            {activeAlertsCount > 0 && (
-              <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">
-                {activeAlertsCount}
-              </span>
-            )}
-            {isActive('/admin/safety') && <ChevronRight size={14} className="text-red-300/70" />}
-          </Link>
+          <>
+            <Link
+              to="/admin/safety"
+              onClick={() => setSidebarOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group ${
+                isActive('/admin/safety')
+                  ? 'bg-red-500/20 text-red-200 shadow-sm'
+                  : 'text-red-300/70 hover:text-red-200 hover:bg-red-500/10'
+              }`}
+            >
+              <ShieldAlert size={18} strokeWidth={isActive('/admin/safety') ? 2.2 : 1.8} />
+              <span className="flex-1">Safety Monitor</span>
+              {activeAlertsCount > 0 && (
+                <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {activeAlertsCount}
+                </span>
+              )}
+              {isActive('/admin/safety') && <ChevronRight size={14} className="text-red-300/70" />}
+            </Link>
+            <Link
+              to="/admin/staff-accounts"
+              onClick={() => setSidebarOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group ${
+                isActive('/admin/staff-accounts')
+                  ? 'bg-white/15 text-white shadow-sm'
+                  : 'text-white/60 hover:text-white hover:bg-white/8'
+              }`}
+            >
+              <UserCog size={18} strokeWidth={isActive('/admin/staff-accounts') ? 2.2 : 1.8} />
+              <span className="flex-1">Staff Accounts</span>
+              {isActive('/admin/staff-accounts') && <ChevronRight size={14} className="text-gold/70" />}
+            </Link>
+          </>
         )}
       </nav>
 
