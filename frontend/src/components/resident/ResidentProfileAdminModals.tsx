@@ -131,7 +131,7 @@ export function EditResidentModal({ resident, safehouses, onClose, onSaved }: Ed
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Assigned social worker</label>
-              <input value={form.assignedSocialWorker} onChange={e => set('assignedSocialWorker', e.target.value)}
+              <input pattern="[A-Za-z\s'\-]*" title="Letters, spaces, apostrophes, and hyphens only." value={form.assignedSocialWorker} onChange={e => set('assignedSocialWorker', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
             </div>
             <div>

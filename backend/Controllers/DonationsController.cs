@@ -1,5 +1,6 @@
 using Backend.Data;
 using Backend.Models;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,24 @@ namespace Backend.Controllers;
 [Authorize(Roles = "Admin,Staff,Donor")]
 public class DonationsController : ControllerBase
 {
+    private static bool TryParseDonationDate(string? raw, out DateOnly parsed, out string? error)
+    {
+        parsed = default;
+        error = null;
+        if (!DateOnly.TryParse(raw, out parsed))
+        {
+            error = "DonationDate must be a valid date.";
+            return false;
+        }
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (parsed > today)
+        {
+            error = "DonationDate cannot be in the future.";
+            return false;
+        }
+        return true;
+    }
+
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
 
@@ -159,11 +178,14 @@ public class DonationsController : ControllerBase
     [Authorize(Roles = "Admin,Staff")]
     public async Task<IActionResult> Create([FromBody] DonationWriteDto dto)
     {
+        if (!TryParseDonationDate(dto.DonationDate, out var donationDate, out var dateError))
+            return BadRequest(new { error = dateError });
+
         var donation = new Donation
         {
             SupporterId = dto.SupporterId,
             DonationType = dto.DonationType,
-            DonationDate = DateOnly.Parse(dto.DonationDate),
+            DonationDate = donationDate,
             IsRecurring = dto.IsRecurring,
             CampaignName = dto.CampaignName,
             ChannelSource = dto.ChannelSource,
@@ -183,12 +205,15 @@ public class DonationsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] DonationWriteDto dto)
     {
+        if (!TryParseDonationDate(dto.DonationDate, out var donationDate, out var dateError))
+            return BadRequest(new { error = dateError });
+
         var donation = await _db.Donations.FindAsync(id);
         if (donation == null) return NotFound();
 
         donation.SupporterId = dto.SupporterId;
         donation.DonationType = dto.DonationType;
-        donation.DonationDate = DateOnly.Parse(dto.DonationDate);
+        donation.DonationDate = donationDate;
         donation.IsRecurring = dto.IsRecurring;
         donation.CampaignName = dto.CampaignName;
         donation.ChannelSource = dto.ChannelSource;
@@ -233,17 +258,23 @@ public record DonationDto(
     string? Notes
 );
 
-public record DonorGiveDto(decimal Amount, string? CampaignName, string? Notes);
+public record DonorGiveDto(
+    [property: Range(typeof(decimal), "0.01", "1000000000")] decimal Amount,
+    string? CampaignName,
+    string? Notes
+);
 
 public record DonationWriteDto(
-    int SupporterId,
-    string DonationType,
-    string DonationDate,
+    [property: Range(1, int.MaxValue)] int SupporterId,
+    [property: Required] string DonationType,
+    [property: Required] string DonationDate,
     bool IsRecurring,
     string? CampaignName,
     string? ChannelSource,
     string? CurrencyCode,
+    [property: Range(typeof(decimal), "0", "1000000000")] 
     decimal? Amount,
+    [property: Range(typeof(decimal), "0", "1000000000")] 
     decimal? EstimatedValue,
     string? ImpactUnit,
     string? Notes

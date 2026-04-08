@@ -509,12 +509,12 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             </div>
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">First Name</label>
-              <input type="text" value={form.firstName} onChange={e => set('firstName', e.target.value)} placeholder="Optional"
+              <input type="text" pattern="[A-Za-z\s'\-]*" title="Letters, spaces, apostrophes, and hyphens only." value={form.firstName} onChange={e => set('firstName', e.target.value)} placeholder="Optional"
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Last Name</label>
-              <input type="text" value={form.lastName} onChange={e => set('lastName', e.target.value)} placeholder="Optional"
+              <input type="text" pattern="[A-Za-z\s'\-]*" title="Letters, spaces, apostrophes, and hyphens only." value={form.lastName} onChange={e => set('lastName', e.target.value)} placeholder="Optional"
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
