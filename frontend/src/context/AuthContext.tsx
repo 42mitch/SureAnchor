@@ -12,6 +12,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error?: string; destination?: string }>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -20,14 +21,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Check existing session on mount
-  useEffect(() => {
-    apiFetch('/api/auth/me')
+  async function fetchMe() {
+    return apiFetch('/api/auth/me')
       .then(res => (res.ok ? res.json() : null))
       .then((data: AuthUser | null) => setUser(data))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+      .catch(() => setUser(null));
+  }
+
+  // Check existing session on mount
+  useEffect(() => {
+    fetchMe().finally(() => setLoading(false));
   }, []);
+
+  async function refreshUser(): Promise<void> {
+    await fetchMe();
+  }
 
   async function login(email: string, password: string): Promise<{ error?: string; destination?: string }> {
     try {
@@ -58,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

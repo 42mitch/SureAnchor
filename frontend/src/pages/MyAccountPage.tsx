@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 
 export default function MyAccountPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   const [displayName, setDisplayName]     = useState(user?.displayName ?? '');
   const [savingName, setSavingName]       = useState(false);
@@ -40,6 +40,7 @@ export default function MyAccountPage() {
       body: JSON.stringify({ displayName: displayName.trim() }),
     });
     if (res.ok) {
+      await refreshUser();
       setNameSaved(true);
       setTimeout(() => setNameSaved(false), 3000);
     } else {
