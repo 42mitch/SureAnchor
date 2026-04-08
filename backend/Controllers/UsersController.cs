@@ -20,9 +20,9 @@ public class UsersController : ControllerBase
     }
 
     // ── PATCH /api/users/me/display-name ─────────────────────────────────────
-    // Any authenticated staff/admin user can update their own display name.
+    // Any authenticated user can update their own display name.
     [HttpPatch("me/display-name")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin,Staff,Donor")]
     public async Task<IActionResult> UpdateMyDisplayName([FromBody] UpdateDisplayNameDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.DisplayName))
@@ -37,10 +37,9 @@ public class UsersController : ControllerBase
     }
 
     // ── POST /api/users/me/change-password ────────────────────────────────────
-    // Any authenticated staff/admin user can change their own password,
-    // provided they supply their current password correctly.
+    // Any authenticated user can change their own password.
     [HttpPost("me/change-password")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin,Staff,Donor")]
     public async Task<IActionResult> ChangeMyPassword([FromBody] ChangePasswordDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.NewPassword))
