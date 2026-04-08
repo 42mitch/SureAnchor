@@ -21,6 +21,14 @@ interface Visitation {
   outcome: string;
 }
 
+interface VisitationDetail extends Visitation {
+  purpose?: string;
+  observations?: string;
+  locationVisited?: string;
+  familyMembersPresent?: string;
+  followUpNotes?: string;
+}
+
 interface Resident { residentId: number; internalCode: string; }
 
 const cooperationBadge = (level: string) => {
@@ -49,13 +57,54 @@ const outcomeBadge = (outcome: string) => {
   );
 };
 
-function VisitDetailModal({ visit, onClose, onDelete, isAdmin }: {
-  visit: Visitation; onClose: () => void; onDelete: () => void; isAdmin: boolean;
+function VisitDetailModal({ visitId, onClose, onDelete, isAdmin }: {
+  visitId: number; onClose: () => void; onDelete: () => void; isAdmin: boolean;
 }) {
+  const [visit, setVisit] = useState<VisitationDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`/api/home-visitations/${visitId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setVisit({
+            visitationId: data.visitationId,
+            residentId: data.residentId,
+            residentCode: data.residentCode,
+            visitDate: data.visitDate,
+            socialWorker: data.socialWorker,
+            visitType: data.visitType,
+            familyCooperation: data.familyCooperationLevel || '',
+            safetyConcern: data.safetyConcernsNoted,
+            followUpNeeded: data.followUpNeeded,
+            outcome: data.visitOutcome || '',
+            purpose: data.purpose,
+            observations: data.observations,
+            locationVisited: data.locationVisited,
+            familyMembersPresent: data.familyMembersPresent,
+            followUpNotes: data.followUpNotes,
+          });
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [visitId]);
+
+  if (loading || !visit) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-12 flex justify-center">
+          <div className="w-8 h-8 rounded-full border-4 border-teal border-t-transparent animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
+      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in">
         <div className={`rounded-t-3xl px-6 py-5 flex items-start justify-between border-b border-dark/8 ${visit.safetyConcern ? 'bg-red-50' : 'bg-cream'}`}>
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -64,6 +113,11 @@ function VisitDetailModal({ visit, onClose, onDelete, isAdmin }: {
               {visit.safetyConcern && (
                 <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-100 text-red-600 px-2.5 py-1 rounded-lg">
                   <AlertTriangle size={11} />Safety Concern
+                </span>
+              )}
+              {visit.followUpNeeded && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-blue-100 text-blue-600 px-2.5 py-1 rounded-lg">
+                  <Clock size={11} />Follow-Up Needed
                 </span>
               )}
             </div>
@@ -95,10 +149,34 @@ function VisitDetailModal({ visit, onClose, onDelete, isAdmin }: {
               {cooperationBadge(visit.familyCooperation)}
             </div>
             <div className="bg-cream rounded-2xl px-4 py-4">
-              <p className="text-xs font-semibold text-dark/40 uppercase tracking-widests mb-2">Outcome</p>
+              <p className="text-xs font-semibold text-dark/40 uppercase tracking-widest mb-2">Outcome</p>
               {outcomeBadge(visit.outcome)}
             </div>
           </div>
+          {visit.locationVisited && (
+            <div className="bg-cream rounded-2xl px-4 py-4">
+              <p className="text-xs font-semibold text-dark/40 uppercase tracking-widest mb-2">Location Visited</p>
+              <p className="text-sm text-dark">{visit.locationVisited}</p>
+            </div>
+          )}
+          {visit.familyMembersPresent && (
+            <div className="bg-cream rounded-2xl px-4 py-4">
+              <p className="text-xs font-semibold text-dark/40 uppercase tracking-widest mb-2">Family Members Present</p>
+              <p className="text-sm text-dark">{visit.familyMembersPresent}</p>
+            </div>
+          )}
+          {visit.purpose && (
+            <div className="bg-cream rounded-2xl px-4 py-4">
+              <p className="text-xs font-semibold text-dark/40 uppercase tracking-widest mb-2">Purpose of Visit</p>
+              <p className="text-sm text-dark leading-relaxed">{visit.purpose}</p>
+            </div>
+          )}
+          {visit.observations && (
+            <div className="bg-cream rounded-2xl px-4 py-4">
+              <p className="text-xs font-semibold text-dark/40 uppercase tracking-widest mb-2">Observations</p>
+              <p className="text-sm text-dark leading-relaxed">{visit.observations}</p>
+            </div>
+          )}
           {visit.safetyConcern && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl px-4 py-4">
               <AlertTriangle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
@@ -106,6 +184,12 @@ function VisitDetailModal({ visit, onClose, onDelete, isAdmin }: {
                 <p className="text-sm font-semibold text-red-700 mb-0.5">Safety Concern Flagged</p>
                 <p className="text-xs text-red-500">This visit has been flagged for supervisor review.</p>
               </div>
+            </div>
+          )}
+          {visit.followUpNeeded && (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl px-4 py-4">
+              <p className="text-xs font-semibold text-blue-600 uppercase tracking-widest mb-2">Follow-Up Actions Required</p>
+              <p className="text-sm text-dark leading-relaxed">{visit.followUpNotes || 'Follow-up needed (no notes provided)'}</p>
             </div>
           )}
           <div className="flex gap-3 pt-2">
@@ -130,6 +214,7 @@ function LogVisitModal({ residents, onClose, onSaved }: {
   const [form, setForm] = useState({
     residentId: '', visitDate: new Date().toISOString().split('T')[0],
     socialWorker: '', visitType: 'Initial Assessment',
+    locationVisited: '', familyMembersPresent: '',
     familyCooperationLevel: 'Cooperative', visitOutcome: 'Favorable',
     safetyConcernsNoted: false, followUpNeeded: false,
     purpose: '', observations: '', followUpNotes: '',
@@ -225,11 +310,39 @@ function LogVisitModal({ residents, onClose, onSaved }: {
               </select>
             </div>
           </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Location Visited</label>
+              <input type="text" placeholder="Address or location" value={form.locationVisited} onChange={e => set('locationVisited', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Family Members Present</label>
+              <input type="text" placeholder="e.g., Mother and aunt" value={form.familyMembersPresent} onChange={e => set('familyMembersPresent', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+            </div>
+          </div>
           <div>
-            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Observations</label>
-            <textarea rows={3} placeholder="Describe observations..." value={form.observations} onChange={e => set('observations', e.target.value)}
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Purpose of Visit</label>
+            <textarea rows={2} placeholder="Describe the purpose of this visit..." value={form.purpose} onChange={e => set('purpose', e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
           </div>
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Observations</label>
+            <textarea rows={3} placeholder="Describe observations about home environment and family..." value={form.observations} onChange={e => set('observations', e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+          <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl p-3">
+            <input type="checkbox" id="followUpNeeded" checked={form.followUpNeeded} onChange={e => set('followUpNeeded', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+            <label htmlFor="followUpNeeded" className="text-sm font-medium text-blue-700">Follow-up action needed</label>
+          </div>
+          {form.followUpNeeded && (
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Follow-Up Notes</label>
+              <textarea rows={2} placeholder="Describe required follow-up actions..." value={form.followUpNotes} onChange={e => set('followUpNotes', e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+            </div>
+          )}
           <div className="flex items-center gap-3 bg-red-50 border border-red-100 rounded-xl p-3">
             <input type="checkbox" id="safetyConcern" checked={form.safetyConcernsNoted} onChange={e => set('safetyConcernsNoted', e.target.checked)} className="w-4 h-4 accent-red-500" />
             <label htmlFor="safetyConcern" className="text-sm font-medium text-red-700">Flag safety concern (will alert case supervisor)</label>
@@ -253,7 +366,7 @@ export default function VisitationsPage() {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedVisit, setSelectedVisit] = useState<Visitation | null>(null);
+  const [selectedVisitId, setSelectedVisitId] = useState<number | null>(null);
   const [showLogModal, setShowLogModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Visitation | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -271,7 +384,7 @@ export default function VisitationsPage() {
     await apiFetch(`/api/home-visitations/${deleteTarget.visitationId}`, { method: 'DELETE' });
     setVisitations(prev => prev.filter(v => v.visitationId !== deleteTarget.visitationId));
     setDeleteTarget(null);
-    setSelectedVisit(null);
+    setSelectedVisitId(null);
     setDeleteLoading(false);
   }
 
@@ -330,7 +443,7 @@ export default function VisitationsPage() {
                 </thead>
                 <tbody>
                   {visitsPag.pageItems.map((visit, i) => (
-                    <tr key={visit.visitationId} onClick={() => setSelectedVisit(visit)}
+                    <tr key={visit.visitationId} onClick={() => setSelectedVisitId(visit.visitationId)}
                       className={`border-b border-dark/5 last:border-0 cursor-pointer hover:bg-teal/4 transition-colors group ${(visitsPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}>
                       <td className="px-5 py-4"><span className="font-mono text-xs font-bold text-dark/40">#{visit.visitationId}</span></td>
                       <td className="px-5 py-4">
@@ -383,9 +496,13 @@ export default function VisitationsPage() {
         </div>
       </div>
 
-      {selectedVisit && (
-        <VisitDetailModal visit={selectedVisit} onClose={() => setSelectedVisit(null)}
-          onDelete={() => { setDeleteTarget(selectedVisit); setSelectedVisit(null); }} isAdmin={isAdmin} />
+      {selectedVisitId && (
+        <VisitDetailModal visitId={selectedVisitId} onClose={() => setSelectedVisitId(null)}
+          onDelete={() => {
+            const visit = visitations.find(v => v.visitationId === selectedVisitId);
+            if (visit) setDeleteTarget(visit);
+            setSelectedVisitId(null);
+          }} isAdmin={isAdmin} />
       )}
       {showLogModal && (
         <LogVisitModal residents={residents} onClose={() => setShowLogModal(false)}
