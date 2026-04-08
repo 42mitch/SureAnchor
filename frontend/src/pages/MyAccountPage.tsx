@@ -3,6 +3,7 @@ import { UserCircle, Mail, ShieldCheck, KeyRound, Eye, EyeOff, Check } from 'luc
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import ValidationModal from '../components/ValidationModal';
 
 export default function MyAccountPage() {
   const { user, refreshUser } = useAuth();
@@ -35,7 +36,7 @@ export default function MyAccountPage() {
     if (!displayName.trim()) { setValidationMsg('Display name cannot be empty.'); return; }
     setSavingName(true);
     // Update via the users endpoint — find self by email
-    const res = await apiFetch('/api/users/me/display-name', {
+    const res = await apiFetch('/api/profile/display-name', {
       method: 'PATCH',
       body: JSON.stringify({ displayName: displayName.trim() }),
     });
@@ -61,7 +62,7 @@ export default function MyAccountPage() {
       return;
     }
     setSavingPassword(true);
-    const res = await apiFetch('/api/users/me/change-password', {
+    const res = await apiFetch('/api/profile/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     });

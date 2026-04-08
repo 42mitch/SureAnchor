@@ -33,7 +33,7 @@ export default function DonorMyAccountPage() {
     if (!displayName.trim()) { setNameError('Display name cannot be empty.'); return; }
     setNameError('');
     setSavingName(true);
-    const res = await apiFetch('/api/users/me/display-name', {
+    const res = await apiFetch('/api/profile/display-name', {
       method: 'PATCH',
       body: JSON.stringify({ displayName: displayName.trim() }),
     });
@@ -54,7 +54,7 @@ export default function DonorMyAccountPage() {
     if (newPassword !== confirmPassword) { setPasswordError('New passwords do not match.'); return; }
     setPasswordError('');
     setSavingPassword(true);
-    const res = await apiFetch('/api/users/me/change-password', {
+    const res = await apiFetch('/api/profile/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     });

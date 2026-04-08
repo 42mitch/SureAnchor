@@ -19,44 +19,6 @@ public class UsersController : ControllerBase
         _roleManager = roleManager;
     }
 
-    // ── PATCH /api/users/me/display-name ─────────────────────────────────────
-    // Any authenticated user can update their own display name.
-    [HttpPatch("me/display-name")]
-    [Authorize(Roles = "Admin,Staff,Donor")]
-    public async Task<IActionResult> UpdateMyDisplayName([FromBody] UpdateDisplayNameDto dto)
-    {
-        if (string.IsNullOrWhiteSpace(dto.DisplayName))
-            return BadRequest(new { message = "Display name cannot be empty." });
-
-        var user = await _userManager.GetUserAsync(User);
-        if (user == null) return Unauthorized();
-
-        user.DisplayName = dto.DisplayName.Trim();
-        await _userManager.UpdateAsync(user);
-        return NoContent();
-    }
-
-    // ── POST /api/users/me/change-password ────────────────────────────────────
-    // Any authenticated user can change their own password.
-    [HttpPost("me/change-password")]
-    [Authorize(Roles = "Admin,Staff,Donor")]
-    public async Task<IActionResult> ChangeMyPassword([FromBody] ChangePasswordDto dto)
-    {
-        if (string.IsNullOrWhiteSpace(dto.NewPassword))
-            return BadRequest(new { message = "New password is required." });
-
-        var user = await _userManager.GetUserAsync(User);
-        if (user == null) return Unauthorized();
-
-        var result = await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
-        if (!result.Succeeded)
-        {
-            var errs = result.Errors.Select(e => e.Description).ToList();
-            return BadRequest(new { message = errs.First(), errors = errs });
-        }
-        return NoContent();
-    }
-
     // ── GET /api/users ────────────────────────────────────────────────────────
     // Returns all Admin and Staff accounts only (not Donors).
     [HttpGet]
@@ -227,5 +189,3 @@ public record StaffUserUpdateDto(
 );
 
 public record ResetPasswordDto(string NewPassword);
-public record UpdateDisplayNameDto(string DisplayName);
-public record ChangePasswordDto(string CurrentPassword, string NewPassword);
