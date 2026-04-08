@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using Backend.Models;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -12,12 +14,18 @@ public class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole> _roleManager;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, RoleManager<IdentityRole> roleManager)
+    public AuthController(
+        UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
+        RoleManager<IdentityRole> roleManager,
+        IConfiguration configuration)
     {
-        _userManager = userManager;
+        _userManager   = userManager;
         _signInManager = signInManager;
-        _roleManager = roleManager;
+        _roleManager   = roleManager;
+        _configuration = configuration;
     }
 
     // ── POST /api/auth/login ──────────────────────────────────────────────────
@@ -78,6 +86,89 @@ public class AuthController : ControllerBase
         // Sign them in immediately after registration
         await _signInManager.SignInAsync(user, isPersistent: false);
         return Ok(new UserResponse(user.Email!, user.DisplayName, ["Donor"]));
+    }
+
+    // ── GET /api/auth/google/signin ───────────────────────────────────────────
+    // Initiates the Google OAuth flow. The browser is redirected to Google's
+    // consent screen. No credentials required — anyone can start this flow.
+    [HttpGet("google/signin")]
+    [AllowAnonymous]
+    public IActionResult GoogleSignIn()
+    {
+        // After the OAuth middleware processes the Google callback at /signin-google,
+        // it will redirect the browser to this action URL.
+        var callbackUrl = Url.Action(nameof(GoogleCallback), "Auth", null, Request.Scheme);
+        var properties  = _signInManager.ConfigureExternalAuthenticationProperties(
+            GoogleDefaults.AuthenticationScheme, callbackUrl);
+        return Challenge(properties, GoogleDefaults.AuthenticationScheme);
+    }
+
+    // ── GET /api/auth/google/callback ─────────────────────────────────────────
+    // Called by the Google OAuth middleware after it has validated the token.
+    // Creates or links the user account, signs them in, then redirects to the
+    // frontend donor portal.
+    [HttpGet("google/callback")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GoogleCallback()
+    {
+        var frontendUrl = _configuration["App:FrontendUrl"]
+                          ?? "https://zealous-tree-029394910.6.azurestaticapps.net";
+
+        var info = await _signInManager.GetExternalLoginInfoAsync();
+        if (info == null)
+            return Redirect($"{frontendUrl}/login?error=google_failed");
+
+        // ── Case 1: existing Google login link ────────────────────────────────
+        var signInResult = await _signInManager.ExternalLoginSignInAsync(
+            info.LoginProvider, info.ProviderKey,
+            isPersistent: true, bypassTwoFactor: false);
+
+        if (signInResult.Succeeded)
+        {
+            var linkedUser  = await _userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
+            var linkedRoles = linkedUser != null ? await _userManager.GetRolesAsync(linkedUser) : [];
+            var dest        = linkedRoles.Contains("Admin") || linkedRoles.Contains("Staff") ? "/admin" : "/donor";
+            return Redirect($"{frontendUrl}{dest}");
+        }
+
+        var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+        var name  = info.Principal.FindFirstValue(ClaimTypes.Name);
+
+        if (string.IsNullOrEmpty(email))
+            return Redirect($"{frontendUrl}/login?error=no_email");
+
+        // ── Case 2: password account exists with the same email ───────────────
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user != null)
+        {
+            await _userManager.AddLoginAsync(user, info);
+            await _signInManager.SignInAsync(user, isPersistent: true);
+            var userRoles = await _userManager.GetRolesAsync(user);
+            var dest      = userRoles.Contains("Admin") || userRoles.Contains("Staff") ? "/admin" : "/donor";
+            return Redirect($"{frontendUrl}{dest}");
+        }
+
+        // ── Case 3: brand new user — create a Donor account ──────────────────
+        user = new ApplicationUser
+        {
+            UserName       = email,
+            Email          = email,
+            DisplayName    = !string.IsNullOrWhiteSpace(name) ? name.Trim() : email,
+            EmailConfirmed = true,
+        };
+
+        var createResult = await _userManager.CreateAsync(user);
+        if (!createResult.Succeeded)
+            return Redirect($"{frontendUrl}/login?error=create_failed");
+
+        await _userManager.AddLoginAsync(user, info);
+
+        if (!await _roleManager.RoleExistsAsync("Donor"))
+            await _roleManager.CreateAsync(new IdentityRole("Donor"));
+        await _userManager.AddToRoleAsync(user, "Donor");
+
+        await _signInManager.SignInAsync(user, isPersistent: true);
+        return Redirect($"{frontendUrl}/donor");
     }
 
     // ── POST /api/auth/logout ─────────────────────────────────────────────────
