@@ -19,6 +19,8 @@ import ContactPage from './pages/ContactPage';
 import CookieConsent from './components/CookieConsent';
 import ScrollToTop from './components/ScrollToTop';
 import StaffAccountsPage from './pages/StaffAccountsPage';
+import MyAccountPage from './pages/MyAccountPage';
+
 
 function App() {
   return (
@@ -76,6 +78,11 @@ function App() {
           <Route path="/admin/resident/:id" element={
             <RequireAuth roles={['Admin', 'Staff']}>
               <ResidentProfilePage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/my-account" element={
+            <RequireAuth roles={['Admin', 'Staff']}>
+              <MyAccountPage />
             </RequireAuth>
           } />
 

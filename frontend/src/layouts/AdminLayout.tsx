@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, Home, HeartHandshake,
-  BarChart2, Settings, LogOut, Menu, ChevronRight, ShieldAlert, UserCog
+  BarChart2, Settings, LogOut, Menu, ChevronRight, ShieldAlert,
+  UserCog, UserCircle
 } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
@@ -13,25 +14,41 @@ interface AdminLayoutProps {
 }
 
 const navItems = [
-  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { label: 'Caseload', href: '/admin/caseload', icon: Users },
-  { label: 'Process Recording', href: '/admin/process-recording', icon: FileText },
-  { label: 'Home Visitations', href: '/admin/visitations', icon: Home },
-  { label: 'Donors', href: '/admin/donors', icon: HeartHandshake },
-  { label: 'Reports', href: '/admin/reports', icon: BarChart2 },
+  { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard },
+  { label: 'Caseload',         href: '/admin/caseload',          icon: Users },
+  { label: 'Process Recording',href: '/admin/process-recording', icon: FileText },
+  { label: 'Home Visitations', href: '/admin/visitations',       icon: Home },
+  { label: 'Donors',           href: '/admin/donors',            icon: HeartHandshake },
+  { label: 'Reports',          href: '/admin/reports',           icon: BarChart2 },
 ];
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen]       = useState(false);
+  const [profileOpen, setProfileOpen]       = useState(false);
   const [activeAlertsCount, setActiveAlertsCount] = useState<number>(0);
-  const location = useLocation();
-  const navigate = useNavigate();
+  const profileRef = useRef<HTMLDivElement>(null);
+  const location   = useLocation();
+  const navigate   = useNavigate();
   const { user, logout } = useAuth();
 
   async function handleLogout() {
     await logout();
     navigate('/login', { replace: true });
   }
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close dropdown on route change
+  useEffect(() => { setProfileOpen(false); }, [location.pathname]);
 
   // Fetch active alerts count for Safety Monitor badge
   useEffect(() => {
@@ -41,29 +58,29 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           apiFetch('/api/process-recordings'),
           apiFetch('/api/incident-reports?resolved=false'),
         ]);
-
         if (recordingsRes.ok && incidentsRes.ok) {
           const recordings = await recordingsRes.json();
-          const incidents = await incidentsRes.json();
-          const flaggedRecordings = recordings.filter((r: any) => r.concernsFlagged);
-          setActiveAlertsCount(flaggedRecordings.length + incidents.length);
+          const incidents  = await incidentsRes.json();
+          const flagged    = recordings.filter((r: any) => r.concernsFlagged);
+          setActiveAlertsCount(flagged.length + incidents.length);
         }
       } catch (error) {
         console.error('Failed to fetch alerts count:', error);
       }
     }
-
     if (user?.roles.includes('Admin')) {
       fetchAlertsCount();
-      // Refresh count every 60 seconds
       const interval = setInterval(fetchAlertsCount, 60000);
       return () => clearInterval(interval);
     }
   }, [user]);
 
   const displayName = user?.displayName ?? user?.email ?? 'User';
-  const initials = displayName.slice(0, 2).toUpperCase();
-  const roleLabel = user?.roles.includes('Admin') ? 'Admin'
+  const nameParts   = displayName.trim().split(/\s+/);
+  const initials    = nameParts.length >= 2
+    ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+    : displayName.slice(0, 2).toUpperCase();
+  const roleLabel   = user?.roles.includes('Admin') ? 'Admin'
     : user?.roles.includes('Staff') ? 'Staff'
     : user?.roles.includes('Donor') ? 'Donor'
     : 'User';
@@ -97,7 +114,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </Link>
         ))}
 
-        {/* Admin-only: Safety Overview */}
+        {/* Admin-only links */}
         {user?.roles.includes('Admin') && (
           <>
             <Link
@@ -136,10 +153,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </nav>
 
       <div className="px-3 pb-4 border-t border-white/10 pt-4 space-y-0.5">
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-white hover:bg-white/8 transition-all">
+        <Link
+          to="/admin/my-account"
+          onClick={() => setSidebarOpen(false)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-white hover:bg-white/8 transition-all"
+        >
           <Settings size={18} strokeWidth={1.8} />
-          Settings
-        </button>
+          My Account
+        </Link>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/50 hover:text-red-300 hover:bg-red-500/10 transition-all"
@@ -161,10 +182,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
-          />
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <aside className="relative flex flex-col w-64 bg-navy z-10 animate-fade-in">
             <SidebarContent />
           </aside>
@@ -183,15 +201,57 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <Menu size={20} />
             </button>
             <div className="text-sm font-medium text-dark/50">
-              {isActive('/admin/safety') ? 'Safety Monitor' : navItems.find(n => isActive(n.href))?.label || 'Admin'}
+              {isActive('/admin/safety') ? 'Safety Monitor'
+                : isActive('/admin/staff-accounts') ? 'Staff Accounts'
+                : isActive('/admin/my-account') ? 'My Account'
+                : navItems.find(n => isActive(n.href))?.label || 'Admin'}
             </div>
           </div>
+
           <div className="flex items-center gap-3">
             <div className="bg-teal/10 text-teal text-xs font-semibold px-3 py-1.5 rounded-full border border-teal/20">
               {roleLabel}
             </div>
-            <div className="w-8 h-8 rounded-full bg-navy flex items-center justify-center text-white text-xs font-bold">
-              {initials}
+
+            {/* Profile avatar + dropdown */}
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => setProfileOpen(o => !o)}
+                className="w-8 h-8 rounded-full bg-navy flex items-center justify-center text-white text-xs font-bold hover:bg-navy-light transition-colors focus:outline-none focus:ring-2 focus:ring-teal/40"
+              >
+                {initials}
+              </button>
+
+              {profileOpen && (
+                <div className="absolute right-0 top-10 w-56 bg-white rounded-2xl shadow-card-hover border border-dark/8 z-50 overflow-hidden animate-fade-in">
+                  {/* User info header */}
+                  <div className="px-4 py-3 border-b border-dark/8 bg-cream/60">
+                    <p className="text-sm font-semibold text-navy truncate">{displayName}</p>
+                    <p className="text-xs text-dark/40 truncate">{user?.email}</p>
+                  </div>
+
+                  {/* Menu items */}
+                  <div className="py-1.5">
+                    <Link
+                      to="/admin/my-account"
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-dark/70 hover:bg-teal/6 hover:text-navy transition-colors"
+                    >
+                      <UserCircle size={16} className="text-dark/40" strokeWidth={1.8} />
+                      My Account
+                    </Link>
+                  </div>
+
+                  <div className="border-t border-dark/8 py-1.5">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut size={16} strokeWidth={1.8} />
+                      Log Out
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
