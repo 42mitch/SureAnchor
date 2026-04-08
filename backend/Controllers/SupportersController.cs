@@ -81,6 +81,7 @@ public class SupportersController : ControllerBase
     {
         var supporter = new Supporter
         {
+            SupporterId = (_db.Supporters.Any() ? _db.Supporters.Max(s => s.SupporterId) : 0) + 1,
             DisplayName = dto.DisplayName,
             SupporterType = dto.SupporterType,
             FirstName = dto.FirstName,

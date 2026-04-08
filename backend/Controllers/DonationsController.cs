@@ -1,6 +1,5 @@
 using Backend.Data;
 using Backend.Models;
-using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -264,22 +263,25 @@ public record DonationDto(
     string? Notes
 );
 
+// Note: data annotation attributes on record primary constructor parameters
+// are not supported in .NET 10 and cause 500 errors. Validation is handled
+// on the frontend and via the TryParseDonationDate helper instead.
 public record DonorGiveDto(
-    [Range(typeof(decimal), "0.01", "1000000000")] decimal Amount,
+    decimal Amount,
     string? CampaignName,
     string? Notes
 );
 
 public record DonationWriteDto(
-    [Range(1, int.MaxValue)] int SupporterId,
-    [Required] string DonationType,
-    [Required] string DonationDate,
+    int SupporterId,
+    string DonationType,
+    string DonationDate,
     bool IsRecurring,
     string? CampaignName,
     string? ChannelSource,
     string? CurrencyCode,
-    [Range(typeof(decimal), "0", "1000000000")] decimal? Amount,
-    [Range(typeof(decimal), "0", "1000000000")] decimal? EstimatedValue,
+    decimal? Amount,
+    decimal? EstimatedValue,
     string? ImpactUnit,
     string? Notes
 );

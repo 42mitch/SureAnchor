@@ -1,6 +1,5 @@
 using Backend.Data;
 using Backend.Models;
-using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -240,14 +239,16 @@ public record ResidentDetailDto(
     string? RecentNote
 );
 
+// Note: [property: ...] data annotation attributes on record primary constructor
+// parameters are not supported in .NET 10 and cause 500 errors. Validation is
+// handled on the frontend instead.
 public record ResidentWriteDto(
-    [property: Required, StringLength(50)] string CaseControlNo,
-    [property: Required, StringLength(50)] string InternalCode,
-    [property: Range(1, int.MaxValue)] int SafehouseId,
-    [property: Required] string CaseStatus,
+    string CaseControlNo,
+    string InternalCode,
+    int SafehouseId,
+    string CaseStatus,
     string? CaseCategory,
     string? CurrentRiskLevel,
-    [property: RegularExpression(@"^[A-Za-z\s'\-]+$", ErrorMessage = "AssignedSocialWorker can only contain letters, spaces, apostrophes, or hyphens.")]
     string? AssignedSocialWorker,
     string? Religion,
     DateOnly? DateOfBirth,
