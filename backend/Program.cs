@@ -30,6 +30,19 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
+// Google OAuth — credentials loaded from app settings / Azure env vars
+// Azure env var names use double-underscore: Authentication__Google__ClientId
+builder.Services.AddAuthentication()
+    .AddGoogle(options =>
+    {
+        options.ClientId     = builder.Configuration["Authentication:Google:ClientId"]     ?? "";
+        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
+        // Google will redirect to /signin-google (the middleware's default CallbackPath).
+        // Register that full URL in Google Cloud Console as an authorised redirect URI:
+        //   Production:  https://sure-anchor.azurewebsites.net/signin-google
+        //   Local dev:   http://localhost:5022/signin-google
+    });
+
 // Return 401/403 JSON instead of redirecting (required for SPA)
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -125,6 +138,27 @@ app.Use(async (ctx, next) =>
         ctx.Response.ContentType     = "application/json";
         await ctx.Response.WriteAsJsonAsync(new { error = ex.Message, detail = ex.InnerException?.Message });
     }
+});
+
+// Security headers on every response (API layer)
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["Content-Security-Policy"] =
+        "default-src 'self'; " +
+        "script-src 'self'; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "font-src 'self' https://fonts.gstatic.com; " +
+        "img-src 'self' data: blob:; " +
+        "connect-src 'self'; " +
+        "frame-ancestors 'none'; " +
+        "form-action 'self'; " +
+        "base-uri 'self'; " +
+        "object-src 'none'";
+    ctx.Response.Headers["X-Content-Type-Options"]  = "nosniff";
+    ctx.Response.Headers["X-Frame-Options"]         = "DENY";
+    ctx.Response.Headers["Referrer-Policy"]         = "strict-origin-when-cross-origin";
+    ctx.Response.Headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()";
+    await next();
 });
 
 app.UseCors("AllowFrontend");
