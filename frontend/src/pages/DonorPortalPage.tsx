@@ -7,6 +7,7 @@ import { apiFetch } from '../api';
 import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
+import { formatCurrency, formatCurrencyDetailed, phpToUsd } from '../utils/currency';
 
 interface Donation {
   donationId: number;
@@ -194,7 +195,7 @@ export default function DonorPortalPage() {
         {/* Summary cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Total Given', value: `₱${totalGiven.toLocaleString()}`, icon: HeartHandshake, color: 'text-gold', bg: 'bg-gold/10' },
+            { label: 'Total Given', value: formatCurrency(totalGiven), icon: HeartHandshake, color: 'text-gold', bg: 'bg-gold/10' },
             { label: 'Donations Made', value: donations.length.toString(), icon: TrendingUp, color: 'text-teal', bg: 'bg-teal/10' },
             { label: 'Time as a Donor', value: timeAsDonor, icon: Clock, color: 'text-navy', bg: 'bg-navy/8' },
             { label: 'Since Last Donation', value: timeSinceLast, icon: CalendarCheck, color: 'text-teal-dark', bg: 'bg-teal/8' },
@@ -263,7 +264,7 @@ export default function DonorPortalPage() {
                             <td className="px-5 py-3.5 text-sm text-dark/60">{d.campaignName ?? '—'}</td>
                             <td className="px-5 py-3.5">
                               {d.amount != null
-                                ? <span className="text-sm font-semibold text-navy">₱{d.amount.toLocaleString()}</span>
+                                ? <span className="text-sm font-semibold text-navy">{formatCurrencyDetailed(d.amount)}</span>
                                 : <span className="text-sm text-dark/40 italic">In-kind / Time</span>
                               }
                             </td>
@@ -292,7 +293,7 @@ export default function DonorPortalPage() {
               <div className="bg-white rounded-2xl shadow-sm border border-dark/6 overflow-hidden">
                 <div className="px-6 py-5 border-b border-dark/8 flex items-center justify-between">
                   <h2 className="font-display text-xl font-semibold text-navy">Where Your Giving Goes</h2>
-                  <span className="text-sm text-dark/40 font-medium">₱{totalAllocated.toLocaleString()} allocated</span>
+                  <span className="text-sm text-dark/40 font-medium">{formatCurrency(totalAllocated)} allocated</span>
                 </div>
                 <div className="px-6 py-5 border-b border-dark/6">
                   <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-4">By Program Area</p>
@@ -301,7 +302,7 @@ export default function DonorPortalPage() {
                       <div key={area}>
                         <div className="flex justify-between text-sm mb-1">
                           <span className="font-medium text-dark/70">{area}</span>
-                          <span className="font-semibold text-navy">₱{amt.toLocaleString()}</span>
+                          <span className="font-semibold text-navy">{formatCurrencyDetailed(amt)}</span>
                         </div>
                         <div className="w-full bg-dark/6 rounded-full h-1.5">
                           <div className="bg-teal h-1.5 rounded-full transition-all" style={{ width: `${(amt / totalAllocated) * 100}%` }} />
@@ -326,7 +327,7 @@ export default function DonorPortalPage() {
                           <td className="px-5 py-3.5">
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-navy/8 text-navy">{a.programArea}</span>
                           </td>
-                          <td className="px-5 py-3.5 text-sm font-semibold text-teal">₱{a.amountAllocated.toLocaleString()}</td>
+                          <td className="px-5 py-3.5 text-sm font-semibold text-teal">{formatCurrencyDetailed(a.amountAllocated)}</td>
                           <td className="px-5 py-3.5 text-sm text-dark/50">{a.allocationDate}</td>
                         </tr>
                       ))}
@@ -372,7 +373,7 @@ export default function DonorPortalPage() {
                   <X size={20} />
                 </button>
               </div>
-              <p className="text-white/60 text-sm">Every peso helps protect and restore a child's life.</p>
+              <p className="text-white/60 text-sm">Every dollar helps protect and restore a child's life.</p>
             </div>
 
             {donateSuccess ? (
@@ -393,20 +394,21 @@ export default function DonorPortalPage() {
 
                 {/* Quick amount buttons */}
                 <div>
-                  <label className="block text-sm font-semibold text-dark mb-2">Donation Amount (₱)</label>
+                  <label className="block text-sm font-semibold text-dark mb-2">Donation Amount (in PHP)</label>
                   <div className="grid grid-cols-4 gap-2 mb-3">
                     {[500, 1000, 2500, 5000].map(amt => (
                       <button
                         key={amt}
                         type="button"
                         onClick={() => setDonateAmount(amt.toString())}
-                        className={`py-2 rounded-lg text-sm font-semibold border-2 transition-all ${
+                        className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all ${
                           donateAmount === amt.toString()
                             ? 'bg-navy text-white border-navy'
                             : 'bg-white text-navy border-dark/20 hover:border-navy'
                         }`}
                       >
-                        ₱{amt.toLocaleString()}
+                        <div>${Math.round(phpToUsd(amt))}</div>
+                        <div className="text-[10px] opacity-60">(₱{amt.toLocaleString()})</div>
                       </button>
                     ))}
                   </div>
