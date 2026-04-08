@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
+import { resetConsent } from '../components/CookieConsent';
 
 interface PublicLayoutProps {
   children: React.ReactNode;
@@ -224,16 +225,25 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
             <p className="text-sm text-center font-sans italic text-white/50">
               "We have this hope as an anchor for the soul, firm and secure." — Hebrews 6:19
             </p>
-            <div className="flex gap-6 text-sm">
+            <div className="flex flex-wrap justify-center gap-5 text-sm">
+              <Link to="/privacy" className="hover:text-white transition-colors">
+                Privacy Policy
+              </Link>
               <button
-                onClick={() => setActiveModal('privacy')}
+                onClick={() => setActiveModal('data')}
                 className="hover:text-white transition-colors"
               >
-                Privacy Policy
+                Data Protection
               </button>
-              <Link to="/contact" className="hover:text-white transition-colors">
+              <button
+                onClick={() => { resetConsent(); }}
+                className="hover:text-white transition-colors"
+              >
+                Cookie Settings
+              </button>
+              <a href="mailto:hello@sureanchor.org" className="hover:text-white transition-colors">
                 Contact
-              </Link>
+              </a>
             </div>
           </div>
           <div className="mt-6 pt-6 border-t border-white/10 text-center text-xs text-white/30">
