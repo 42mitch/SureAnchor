@@ -11,7 +11,8 @@ import {
 } from 'recharts';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
-import { formatCurrency } from '../utils/currency';
+import { formatCurrency, formatUsdK, phpToUsd } from '../utils/currency';
+import { CurrencyDisplay } from '../components/CurrencyDisplay';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -126,15 +127,25 @@ function MLPlaceholder({ title, description }: { title: string; description: str
   );
 }
 
-function StatCard({ label, value, sub, color = 'bg-teal/10 text-teal', icon: Icon }: {
-  label: string; value: string; sub?: string; color?: string; icon: React.ElementType;
+function StatCard({ label, value, currencyPhp, sub, color = 'bg-teal/10 text-teal', icon: Icon }: {
+  label: string; value?: string; currencyPhp?: number; sub?: string; color?: string; icon: React.ElementType;
 }) {
   return (
     <div className="card hover:shadow-card-hover transition-all duration-200">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${color}`}>
         <Icon size={20} strokeWidth={1.8} />
       </div>
-      <div className="font-display text-2xl lg:text-3xl font-bold text-navy mb-1">{value}</div>
+      {currencyPhp !== undefined ? (
+        <div className="mb-1">
+          <CurrencyDisplay
+            php={currencyPhp}
+            usdClassName="font-display text-2xl lg:text-3xl font-bold text-navy"
+            phpClassName="text-xs text-dark/30 font-normal mt-0.5"
+          />
+        </div>
+      ) : (
+        <div className="font-display text-2xl lg:text-3xl font-bold text-navy mb-1">{value}</div>
+      )}
       <div className="text-sm text-dark/60 font-medium mb-1">{label}</div>
       {sub && <div className="text-xs text-teal font-semibold">{sub}</div>}
     </div>
@@ -269,7 +280,7 @@ export default function AdminDashboard() {
       id: `don-${d.donationId}`,
       icon: Heart,
       text: `${d.donationType} donation received`,
-      sub: `${d.donorName} · via ${d.channelSource || 'Direct'} · ${d.amount ? fmt(Number(d.amount)) : d.impactUnit}`,
+      sub: `${d.donorName} · via ${d.channelSource || 'Direct'} · ${d.amount ? formatUsdK(phpToUsd(Number(d.amount))) : d.impactUnit}`,
       date: d.donationDate,
     })),
   ]
@@ -357,7 +368,8 @@ export default function AdminDashboard() {
           />
           <StatCard
             label="Total Monetary Donations"
-            value={loadingDonations ? '—' : fmt(totalMonetary)}
+            currencyPhp={loadingDonations ? undefined : totalMonetary}
+            value={loadingDonations ? '—' : undefined}
             sub={loadingDonations ? '' : `${monetaryDonations.length} monetary donations`}
             icon={HeartHandshake}
             color="bg-gold/10 text-gold"
