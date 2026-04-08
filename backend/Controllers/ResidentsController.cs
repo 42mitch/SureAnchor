@@ -1,5 +1,6 @@
 using Backend.Data;
 using Backend.Models;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +90,12 @@ public class ResidentsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ResidentWriteDto dto)
     {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (dto.DateOfBirth.HasValue && dto.DateOfBirth.Value > today)
+            return BadRequest(new { error = "DateOfBirth cannot be in the future." });
+        if (dto.DateOfAdmission.HasValue && dto.DateOfAdmission.Value > today)
+            return BadRequest(new { error = "DateOfAdmission cannot be in the future." });
+
         var resident = new Resident
         {
             ResidentId = (_db.Residents.Any() ? _db.Residents.Max(r => r.ResidentId) : 0) + 1,
@@ -114,6 +121,12 @@ public class ResidentsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] ResidentWriteDto dto)
     {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (dto.DateOfBirth.HasValue && dto.DateOfBirth.Value > today)
+            return BadRequest(new { error = "DateOfBirth cannot be in the future." });
+        if (dto.DateOfAdmission.HasValue && dto.DateOfAdmission.Value > today)
+            return BadRequest(new { error = "DateOfAdmission cannot be in the future." });
+
         var resident = await _db.Residents.FindAsync(id);
         if (resident == null) return NotFound();
 
@@ -196,12 +209,13 @@ public record ResidentDetailDto(
 );
 
 public record ResidentWriteDto(
-    string CaseControlNo,
-    string InternalCode,
-    int SafehouseId,
-    string CaseStatus,
+    [property: Required, StringLength(50)] string CaseControlNo,
+    [property: Required, StringLength(50)] string InternalCode,
+    [property: Range(1, int.MaxValue)] int SafehouseId,
+    [property: Required] string CaseStatus,
     string? CaseCategory,
     string? CurrentRiskLevel,
+    [property: RegularExpression(@"^[A-Za-z\s'\-]+$", ErrorMessage = "AssignedSocialWorker can only contain letters, spaces, apostrophes, or hyphens.")]
     string? AssignedSocialWorker,
     string? Religion,
     DateOnly? DateOfBirth,

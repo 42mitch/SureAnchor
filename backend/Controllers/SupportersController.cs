@@ -1,5 +1,6 @@
 using Backend.Data;
 using Backend.Models;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -181,14 +182,16 @@ public record SupporterDonationDto(
 );
 
 public record SupporterWriteDto(
-    string DisplayName,
-    string SupporterType,
+    [property: Required, StringLength(120)] string DisplayName,
+    [property: Required] string SupporterType,
+    [property: RegularExpression(@"^[A-Za-z\s'\-]+$", ErrorMessage = "FirstName can only contain letters, spaces, apostrophes, or hyphens.")]
     string? FirstName,
+    [property: RegularExpression(@"^[A-Za-z\s'\-]+$", ErrorMessage = "LastName can only contain letters, spaces, apostrophes, or hyphens.")]
     string? LastName,
     string? OrganizationName,
-    string? Email,
+    [property: EmailAddress] string? Email,
     string? Phone,
     string? Country,
-    string Status,
+    [property: Required] string Status,
     string? AcquisitionChannel
 );
