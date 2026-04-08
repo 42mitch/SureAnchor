@@ -3,6 +3,7 @@ import { Heart, TrendingUp, Users, Shield, Home, HeartHandshake, Quote } from 'l
 import PublicLayout from '../layouts/PublicLayout';
 import { apiFetch } from '../api';
 import SupportMissionButton from '../components/SupportMissionButton';
+import { CurrencyDisplay } from '../components/CurrencyDisplay';
 
 interface ImpactStats {
   currentlyInCare: number;
