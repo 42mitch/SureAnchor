@@ -5,7 +5,6 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 import AddResidentModal from '../components/AddResidentModal';
