@@ -189,7 +189,7 @@ function EditUserModal({
     setResetting(false);
   }
 
-  const isSelf = staffUser.userId === currentUserId;
+  const isSelf = staffUser.email === currentUserId;
 
   return (
     <>
@@ -377,7 +377,7 @@ export default function StaffAccountsPage() {
                   </thead>
                   <tbody>
                     {pag.pageItems.map((u, i) => {
-                      const isSelf = u.userId === currentUser?.email;
+                      const isSelf = u.email === currentUser?.email;
                       return (
                         <tr
                           key={u.userId}
@@ -391,7 +391,7 @@ export default function StaffAccountsPage() {
                               <div>
                                 <p className="text-sm font-semibold text-dark">
                                   {u.displayName ?? '—'}
-                                  {u.userId === currentUser?.email && (
+                                  {u.email === currentUser?.email && (
                                     <span className="ml-2 text-xs text-teal font-normal">(you)</span>
                                   )}
                                 </p>
