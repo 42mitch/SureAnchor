@@ -98,10 +98,10 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <a href="#impact" className="btn-gold inline-flex items-center justify-center gap-2 text-base">
+              <Link to="/impact" className="btn-gold inline-flex items-center justify-center gap-2 text-base">
                 Learn About Our Impact
                 <ArrowRight size={18} />
-              </a>
+              </Link>
               <Link
                 to="/login"
                 className="inline-flex items-center justify-center gap-2 border-2 border-white/30 text-white font-semibold px-6 py-3 rounded-lg hover:bg-white/10 transition-all duration-200 text-base"
@@ -153,7 +153,7 @@ export default function LandingPage() {
       </section>
 
       {/* Impact stats */}
-      <section id="impact" className="py-24 bg-navy">
+      <section className="py-24 bg-navy">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <p className="text-gold text-sm font-semibold uppercase tracking-widest mb-3">Impact</p>

@@ -17,11 +17,13 @@ import SafetyPage from './pages/SafetyPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ContactPage from './pages/ContactPage';
 import CookieConsent from './components/CookieConsent';
+import ScrollToTop from './components/ScrollToTop';
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ScrollToTop />
         <CookieConsent />
         <Routes>
           {/* Public — no auth required */}
