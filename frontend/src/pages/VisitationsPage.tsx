@@ -4,6 +4,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 
@@ -125,6 +126,7 @@ function LogVisitModal({ residents, onClose, onSaved }: {
   residents: Resident[]; onClose: () => void; onSaved: (v: Visitation) => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
     residentId: '', visitDate: new Date().toISOString().split('T')[0],
     socialWorker: '', visitType: 'Initial Assessment',
@@ -140,16 +142,15 @@ function LogVisitModal({ residents, onClose, onSaved }: {
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      window.alert('Please fix the highlighted fields before saving.');
       return;
     }
     if (!personNameRe.test(form.socialWorker.trim())) {
-      window.alert("Social Worker can only include letters, spaces, apostrophes, and hyphens.");
+      setValidationMsg("Social worker name can only include letters, spaces, apostrophes, and hyphens.");
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
     if (form.visitDate > today) {
-      window.alert('Visit date cannot be in the future.');
+      setValidationMsg('Visit date cannot be in the future.');
       return;
     }
     setSaving(true);
@@ -173,6 +174,8 @@ function LogVisitModal({ residents, onClose, onSaved }: {
   }
 
   return (
+    <>
+    {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
@@ -238,6 +241,7 @@ function LogVisitModal({ residents, onClose, onSaved }: {
         </form>
       </div>
     </div>
+    </>
   );
 }
 

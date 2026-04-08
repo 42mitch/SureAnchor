@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { apiFetch } from '../../api';
+import ValidationModal from '../ValidationModal';
 
 export interface SafehouseOption {
   safehouseId: number;
@@ -33,6 +34,7 @@ interface EditResidentModalProps {
 
 export function EditResidentModal({ resident, safehouses, onClose, onSaved }: EditResidentModalProps) {
   const [saving, setSaving] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
     caseControlNo: resident.caseNo,
     internalCode: resident.internalCode,
@@ -58,16 +60,15 @@ export function EditResidentModal({ resident, safehouses, onClose, onSaved }: Ed
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      window.alert('Please fix the highlighted fields before saving.');
       return;
     }
     if (!personNameRe.test(form.assignedSocialWorker)) {
-      window.alert('Assigned social worker name can only include letters, spaces, apostrophes, and hyphens.');
+      setValidationMsg('Assigned social worker name can only include letters, spaces, apostrophes, and hyphens.');
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
     if ((form.dateOfBirth && form.dateOfBirth > today) || (form.dateOfAdmission && form.dateOfAdmission > today)) {
-      window.alert('Date of birth and date admitted cannot be in the future.');
+      setValidationMsg('Date of birth and date admitted cannot be in the future.');
       return;
     }
     setSaving(true);
@@ -96,6 +97,8 @@ export function EditResidentModal({ resident, safehouses, onClose, onSaved }: Ed
   }
 
   return (
+    <>
+    {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in">
@@ -183,6 +186,7 @@ export function EditResidentModal({ resident, safehouses, onClose, onSaved }: Ed
         </form>
       </div>
     </div>
+    </>
   );
 }
 
@@ -215,6 +219,7 @@ export function ResidentSessionEditModal({
   onSaved: (n: SessionNoteRow) => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
     sessionDate: note.sessionDate,
     socialWorker: note.socialWorker,
@@ -236,7 +241,6 @@ export function ResidentSessionEditModal({
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      window.alert('Please fix the highlighted fields before saving.');
       return;
     }
     setSaving(true);
@@ -276,6 +280,8 @@ export function ResidentSessionEditModal({
   }
 
   return (
+    <>
+    {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in">
@@ -346,6 +352,7 @@ export function ResidentSessionEditModal({
         </form>
       </div>
     </div>
+    </>
   );
 }
 
@@ -377,6 +384,7 @@ export function ResidentVisitEditModal({
   onSaved: (v: HomeVisitationDetail) => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
     visitDate: initial.visitDate,
     socialWorker: initial.socialWorker,
@@ -401,7 +409,6 @@ export function ResidentVisitEditModal({
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      window.alert('Please fix the highlighted fields before saving.');
       return;
     }
     setSaving(true);
@@ -445,6 +452,8 @@ export function ResidentVisitEditModal({
   }
 
   return (
+    <>
+    {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in">
@@ -533,5 +542,6 @@ export function ResidentVisitEditModal({
         </form>
       </div>
     </div>
+    </>
   );
 }

@@ -28,10 +28,16 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const personNameRe = /^[A-Za-z\s'\-]+$/;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
+    if (!personNameRe.test(displayName.trim())) {
+      setError('Full name can only include letters, spaces, apostrophes, and hyphens.');
+      return;
+    }
     if (password.length < 14) {
       setError('Password must be at least 14 characters long.');
       return;
