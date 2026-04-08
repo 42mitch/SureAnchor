@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Plus, X, ChevronRight, User, Trash2 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +29,9 @@ const riskBadge = (risk: string) => {
   return <span className={map[risk] || 'badge-medium'}>{risk}</span>;
 };
 
+const RISK_LEVELS = ['Low', 'Medium', 'High', 'Critical'] as const;
+const STATUS_LEVELS = ['Active', 'Closed', 'Transferred'] as const;
+
 const statusBadge = (status: string) => {
   const map: Record<string, string> = {
     Active: 'bg-blue-100 text-blue-700',
@@ -45,6 +48,7 @@ const statusBadge = (status: string) => {
 export default function CaseloadPage() {
   const { user } = useAuth();
   const isAdmin = user?.roles.includes('Admin') ?? false;
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [residents, setResidents] = useState<Resident[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +66,21 @@ export default function CaseloadPage() {
       .then(setResidents)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const r = searchParams.get('risk');
+    if (r && RISK_LEVELS.includes(r as (typeof RISK_LEVELS)[number])) {
+      setRiskFilter(r);
+    } else {
+      setRiskFilter('');
+    }
+    const s = searchParams.get('status');
+    if (s && STATUS_LEVELS.includes(s as (typeof STATUS_LEVELS)[number])) {
+      setStatusFilter(s);
+    } else {
+      setStatusFilter('');
+    }
+  }, [searchParams]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -118,19 +137,43 @@ export default function CaseloadPage() {
             </div>
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={e => {
+                const v = e.target.value;
+                setStatusFilter(v);
+                setSearchParams(
+                  (prev) => {
+                    const p = new URLSearchParams(prev);
+                    if (v) p.set('status', v);
+                    else p.delete('status');
+                    return p;
+                  },
+                  { replace: true }
+                );
+              }}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
             >
               <option value="">Status</option>
-              {['Active', 'Closed', 'Transferred'].map(o => <option key={o}>{o}</option>)}
+              {STATUS_LEVELS.map(o => <option key={o}>{o}</option>)}
             </select>
             <select
               value={riskFilter}
-              onChange={e => setRiskFilter(e.target.value)}
+              onChange={e => {
+                const v = e.target.value;
+                setRiskFilter(v);
+                setSearchParams(
+                  (prev) => {
+                    const p = new URLSearchParams(prev);
+                    if (v) p.set('risk', v);
+                    else p.delete('risk');
+                    return p;
+                  },
+                  { replace: true }
+                );
+              }}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
             >
               <option value="">Risk Level</option>
-              {['Low', 'Medium', 'High', 'Critical'].map(o => <option key={o}>{o}</option>)}
+              {RISK_LEVELS.map(o => <option key={o}>{o}</option>)}
             </select>
           </div>
         </div>
