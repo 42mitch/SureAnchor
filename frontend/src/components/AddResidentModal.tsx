@@ -7,6 +7,7 @@ interface Safehouse {
   safehouseId: number;
   safehouseCode: string;
   name: string;
+  city: string;
 }
 
 interface Resident {
@@ -190,7 +191,7 @@ export default function AddResidentModal({
                   <option value="">Select a safehouse...</option>
                   {safehouses.map(s => (
                     <option key={s.safehouseId} value={String(s.safehouseId)}>
-                      {s.safehouseCode} — {s.name}
+                      {s.safehouseCode} — {s.city}
                     </option>
                   ))}
                 </select>
