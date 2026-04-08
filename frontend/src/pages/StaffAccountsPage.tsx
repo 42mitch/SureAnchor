@@ -386,7 +386,13 @@ export default function StaffAccountsPage() {
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-navy/8 flex items-center justify-center text-navy text-xs font-bold flex-shrink-0">
-                                {(u.displayName ?? u.email).slice(0, 2).toUpperCase()}
+                                {(() => {
+                                    const name = u.displayName ?? u.email;
+                                    const parts = name.trim().split(/\s+/);
+                                    return parts.length >= 2
+                                        ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+                                        : name.slice(0, 2).toUpperCase();
+                                })()}
                               </div>
                               <div>
                                 <p className="text-sm font-semibold text-dark">
