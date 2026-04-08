@@ -265,23 +265,21 @@ public record DonationDto(
 );
 
 public record DonorGiveDto(
-    [property: Range(typeof(decimal), "0.01", "1000000000")] decimal Amount,
+    [Range(typeof(decimal), "0.01", "1000000000")] decimal Amount,
     string? CampaignName,
     string? Notes
 );
 
 public record DonationWriteDto(
-    [property: Range(1, int.MaxValue)] int SupporterId,
-    [property: Required] string DonationType,
-    [property: Required] string DonationDate,
+    [Range(1, int.MaxValue)] int SupporterId,
+    [Required] string DonationType,
+    [Required] string DonationDate,
     bool IsRecurring,
     string? CampaignName,
     string? ChannelSource,
     string? CurrencyCode,
-    [property: Range(typeof(decimal), "0", "1000000000")] 
-    decimal? Amount,
-    [property: Range(typeof(decimal), "0", "1000000000")] 
-    decimal? EstimatedValue,
+    [Range(typeof(decimal), "0", "1000000000")] decimal? Amount,
+    [Range(typeof(decimal), "0", "1000000000")] decimal? EstimatedValue,
     string? ImpactUnit,
     string? Notes
 );
