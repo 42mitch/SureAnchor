@@ -144,7 +144,8 @@ export default function DonorPortalPage() {
     return matchType && matchCampaign;
   });
 
-  const donTypeOptions = [...new Set(donations.map(d => d.donationType).filter(Boolean))].sort();
+  const BASE_DONATION_TYPES = ['Monetary', 'InKind', 'Time', 'Skills', 'SocialMedia'];
+  const donTypeOptions = [...new Set([...BASE_DONATION_TYPES, ...donations.map(d => d.donationType).filter(Boolean)])].sort();
   const donCampaignOptions = [...new Set(donations.map(d => d.campaignName).filter(Boolean))].sort() as string[];
 
   const donPag    = useListPagination(filteredDonations, [donTypeFilter, donCampaignFilter, donations.length]);

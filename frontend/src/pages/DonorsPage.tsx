@@ -357,7 +357,7 @@ function EditDonationModal({
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Type</label>
                 <select value={form.donationType} onChange={e => set('donationType', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
-                  {['Monetary', 'InKind', 'Time'].map(t => <option key={t}>{t}</option>)}
+                  {['Monetary', 'InKind', 'Time', 'Skills', 'SocialMedia'].map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
               <div>
