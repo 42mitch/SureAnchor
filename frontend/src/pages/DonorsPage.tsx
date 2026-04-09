@@ -432,6 +432,19 @@ function EditDonationModal({
 
 // ─── Add Donation Modal ───────────────────────────────────────────────────────
 
+// Unit options: label, stored value, fixed PHP rate (null = user supplies rate)
+const UNIT_OPTIONS: { label: string; value: string; phpRate: number | null; isCurrency: boolean }[] = [
+  { label: 'Philippine Peso (₱)', value: 'PHP',   phpRate: 1,    isCurrency: true  },
+  { label: 'US Dollar (USD)',      value: 'USD',   phpRate: 56,   isCurrency: true  },
+  { label: 'Euro (EUR)',           value: 'EUR',   phpRate: 61,   isCurrency: true  },
+  { label: 'Hours',                value: 'Hours', phpRate: null, isCurrency: false },
+  { label: 'Meals',                value: 'Meals', phpRate: null, isCurrency: false },
+  { label: 'Items / Pieces',       value: 'Items', phpRate: null, isCurrency: false },
+  { label: 'Kilograms (kg)',       value: 'kg',    phpRate: null, isCurrency: false },
+  { label: 'Days',                 value: 'Days',  phpRate: null, isCurrency: false },
+  { label: 'Other',                value: 'Other', phpRate: null, isCurrency: false },
+];
+
 function AddDonationModal({
   supporterId,
   supporterName,
@@ -446,68 +459,77 @@ function AddDonationModal({
   const [saving, setSaving] = useState(false);
   const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
-    donationType: 'Monetary',
-    donationDate: new Date().toISOString().slice(0, 10),
-    isRecurring: false,
-    campaignName: '',
-    channelSource: '',
-    currencyCode: 'PHP',
-    amount: '',
-    estimatedValue: '',
-    impactUnit: '',
-    notes: '',
+    donationType:   'Monetary',
+    donationDate:   new Date().toISOString().slice(0, 10),
+    isRecurring:    false,
+    campaignName:   '',
+    channelSource:  '',
+    unit:           'PHP',
+    amount:         '',
+    phpRatePerUnit: '',
+    notes:          '',
   });
 
   function set(key: string, value: string | boolean) {
     setForm(prev => ({ ...prev, [key]: value }));
   }
 
+  const selectedUnit = UNIT_OPTIONS.find(u => u.value === form.unit) ?? UNIT_OPTIONS[0];
+
+  const computedPhpEstimate = (): number | null => {
+    const qty = parseFloat(form.amount);
+    if (!Number.isFinite(qty) || qty < 0) return null;
+    if (selectedUnit.phpRate != null) return Math.round(qty * selectedUnit.phpRate * 100) / 100;
+    const rate = parseFloat(form.phpRatePerUnit);
+    if (!Number.isFinite(rate) || rate < 0) return null;
+    return Math.round(qty * rate * 100) / 100;
+  };
+
+  const phpEstimate = computedPhpEstimate();
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) { formEl.reportValidity(); return; }
     const today = new Date().toISOString().slice(0, 10);
-    if (form.donationDate > today) {
-      setValidationMsg('Donation date cannot be in the future.');
-      return;
-    }
-    const amount = form.amount.trim() === '' ? null : parseFloat(form.amount);
-    const estimatedValue = form.estimatedValue.trim() === '' ? null : parseFloat(form.estimatedValue);
-    if ((amount != null && amount < 0) || (estimatedValue != null && estimatedValue < 0)) {
-      setValidationMsg('Amount and estimated value cannot be negative.');
-      return;
-    }
+    if (form.donationDate > today) { setValidationMsg('Donation date cannot be in the future.'); return; }
+    const qty = form.amount.trim() === '' ? null : parseFloat(form.amount);
+    if (qty != null && qty < 0) { setValidationMsg('Amount cannot be negative.'); return; }
+
+    const monetaryAmount = selectedUnit.isCurrency ? qty : null;
+    const currencyCode   = selectedUnit.isCurrency ? selectedUnit.value : 'PHP';
+
     setSaving(true);
     const res = await apiFetch('/api/donations', {
       method: 'POST',
       body: JSON.stringify({
         supporterId,
-        donationType: form.donationType,
-        donationDate: form.donationDate,
-        isRecurring: form.isRecurring,
-        campaignName: form.campaignName.trim() || null,
-        channelSource: form.channelSource.trim() || null,
-        currencyCode: form.currencyCode.trim() || 'PHP',
-        amount: Number.isFinite(amount as number) ? amount : null,
-        estimatedValue: Number.isFinite(estimatedValue as number) ? estimatedValue : null,
-        impactUnit: form.impactUnit.trim() || null,
-        notes: form.notes.trim() || null,
+        donationType:   form.donationType,
+        donationDate:   form.donationDate,
+        isRecurring:    form.isRecurring,
+        campaignName:   form.campaignName.trim() || null,
+        channelSource:  form.channelSource.trim() || null,
+        currencyCode,
+        amount:         monetaryAmount,
+        estimatedValue: phpEstimate ?? null,
+        impactUnit:     form.unit,
+        notes:          form.notes.trim() || null,
       }),
     });
     if (res.ok) {
       const { donationId } = await res.json();
       onSaved({
         donationId,
-        donationType: form.donationType,
-        donationDate: form.donationDate,
-        isRecurring: form.isRecurring,
-        campaignName: form.campaignName.trim() || null,
-        channelSource: form.channelSource.trim() || null,
-        currencyCode: form.currencyCode.trim() || 'PHP',
-        amount: Number.isFinite(amount as number) ? amount : null,
-        estimatedValue: Number.isFinite(estimatedValue as number) ? estimatedValue : null,
-        impactUnit: form.impactUnit.trim() || null,
-        notes: form.notes.trim() || null,
+        donationType:   form.donationType,
+        donationDate:   form.donationDate,
+        isRecurring:    form.isRecurring,
+        campaignName:   form.campaignName.trim() || null,
+        channelSource:  form.channelSource.trim() || null,
+        currencyCode,
+        amount:         monetaryAmount,
+        estimatedValue: phpEstimate ?? null,
+        impactUnit:     form.unit,
+        notes:          form.notes.trim() || null,
       });
       onClose();
     } else {
@@ -534,8 +556,10 @@ function AddDonationModal({
           </div>
           <form className="p-6 space-y-4" onSubmit={handleSubmit}>
             <div className="grid sm:grid-cols-2 gap-4">
+
+              {/* Type + Date */}
               <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Type</label>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Donation Type</label>
                 <select value={form.donationType} onChange={e => set('donationType', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                   {['Monetary', 'InKind', 'Time', 'Skills', 'SocialMedia'].map(t => <option key={t}>{t}</option>)}
@@ -546,19 +570,71 @@ function AddDonationModal({
                 <input type="date" required value={form.donationDate} onChange={e => set('donationDate', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
               </div>
+
+              {/* Unit + Amount */}
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Unit *</label>
+                <select value={form.unit} onChange={e => { set('unit', e.target.value); set('phpRatePerUnit', ''); }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                  {UNIT_OPTIONS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">
+                  {selectedUnit.isCurrency ? `Amount (${selectedUnit.value}) *` : `Quantity (${selectedUnit.value}) *`}
+                </label>
+                <input type="number" step="0.01" min="0" required value={form.amount}
+                  onChange={e => set('amount', e.target.value)}
+                  placeholder={selectedUnit.isCurrency ? '0.00' : 'e.g. 10'}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+              </div>
+
+              {/* PHP rate per unit — only for non-currency units */}
+              {!selectedUnit.isCurrency && (
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">
+                    PHP value per {selectedUnit.value}{' '}
+                    <span className="text-dark/30 font-normal normal-case">(optional — used to estimate PHP value)</span>
+                  </label>
+                  <input type="number" step="0.01" min="0" value={form.phpRatePerUnit}
+                    onChange={e => set('phpRatePerUnit', e.target.value)}
+                    placeholder={`e.g. 150 per ${selectedUnit.value}`}
+                    className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+                </div>
+              )}
+
+              {/* PHP estimate preview — live computed */}
+              {phpEstimate != null && (
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between bg-teal/6 border border-teal/20 rounded-xl px-4 py-3">
+                    <span className="text-xs font-semibold text-teal-dark uppercase tracking-wide">
+                      Estimated Value (PHP)
+                    </span>
+                    <span className="font-display text-xl font-bold text-teal">
+                      ₱{phpEstimate.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {selectedUnit.value === 'USD' && <p className="text-xs text-dark/35 mt-1 pl-1">Rate used: ₱56 / $1 USD (approximate)</p>}
+                  {selectedUnit.value === 'EUR' && <p className="text-xs text-dark/35 mt-1 pl-1">Rate used: ₱61 / €1 EUR (approximate)</p>}
+                </div>
+              )}
+
+              {/* Recurring */}
               <div className="sm:col-span-2">
                 <label className="flex items-center gap-2 text-sm text-dark/70 cursor-pointer">
                   <input type="checkbox" checked={form.isRecurring} onChange={e => set('isRecurring', e.target.checked)} className="w-4 h-4 accent-teal" />
                   Recurring donation
                 </label>
               </div>
+
+              {/* Campaign + Channel */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Campaign name</label>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Campaign Name</label>
                 <input value={form.campaignName} onChange={e => set('campaignName', e.target.value)}
                   placeholder="e.g. Year-end giving drive"
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Channel</label>
                 <select value={form.channelSource} onChange={e => set('channelSource', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
@@ -568,33 +644,15 @@ function AddDonationModal({
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Currency</label>
-                <input value={form.currencyCode} onChange={e => set('currencyCode', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Amount</label>
-                <input type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)}
-                  placeholder="Leave empty for in-kind/time"
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Est. value (PHP)</label>
-                <input type="number" step="0.01" min="0" value={form.estimatedValue} onChange={e => set('estimatedValue', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Impact unit</label>
-                <input value={form.impactUnit} onChange={e => set('impactUnit', e.target.value)} placeholder="e.g. pesos, hours, meals"
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
-              </div>
+
+              {/* Notes */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Notes</label>
                 <textarea rows={3} value={form.notes} onChange={e => set('notes', e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none" />
               </div>
             </div>
+
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={onClose}
                 className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">

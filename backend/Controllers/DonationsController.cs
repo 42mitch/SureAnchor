@@ -186,19 +186,21 @@ public class DonationsController : ControllerBase
         if (!TryParseDonationDate(dto.DonationDate, out var donationDate, out var dateError))
             return BadRequest(new { error = dateError });
 
+        var nextId = (_db.Donations.Any() ? _db.Donations.Max(d => d.DonationId) : 0) + 1;
         var donation = new Donation
         {
-            SupporterId = dto.SupporterId,
-            DonationType = dto.DonationType,
-            DonationDate = donationDate,
-            IsRecurring = dto.IsRecurring,
-            CampaignName = dto.CampaignName,
+            DonationId    = nextId,
+            SupporterId   = dto.SupporterId,
+            DonationType  = dto.DonationType,
+            DonationDate  = donationDate,
+            IsRecurring   = dto.IsRecurring,
+            CampaignName  = dto.CampaignName,
             ChannelSource = dto.ChannelSource,
-            CurrencyCode = dto.CurrencyCode ?? "PHP",
-            Amount = dto.Amount,
+            CurrencyCode  = dto.CurrencyCode ?? "PHP",
+            Amount        = dto.Amount,
             EstimatedValue = dto.EstimatedValue,
-            ImpactUnit = dto.ImpactUnit,
-            Notes = dto.Notes,
+            ImpactUnit    = dto.ImpactUnit,
+            Notes         = dto.Notes,
         };
         _db.Donations.Add(donation);
         await _db.SaveChangesAsync();
