@@ -119,13 +119,17 @@ if (app.Environment.IsDevelopment())
 }
 
 // Respect X-Forwarded-* headers from Azure's reverse proxy.
-// This must come before UseHsts and UseHttpsRedirection so that
-// Request.IsHttps is correctly set to true for HTTPS requests that
-// were terminated at the load balancer.
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// KnownNetworks/KnownProxies are cleared so Azure's load-balancer IPs are
+// trusted — without this, ForwardedHeaders ignores the X-Forwarded-Proto
+// header, Request.IsHttps stays false, and UseHttpsRedirection redirects
+// every request, breaking CORS (browsers don't follow CORS redirects).
+var fhOptions = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+fhOptions.KnownNetworks.Clear();
+fhOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(fhOptions);
 
 // HSTS: only active outside of development. Because ForwardedHeaders runs
 // first, Request.IsHttps will be true for real HTTPS traffic and the
@@ -134,6 +138,8 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
 }
+
+app.UseHttpsRedirection();
 
 // Manually stamp CORS headers so they survive even on 500 responses.
 string[] corsOrigins = [
@@ -169,7 +175,6 @@ app.Use(async (ctx, next) =>
 });
 
 app.UseCors("AllowFrontend");
-app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
