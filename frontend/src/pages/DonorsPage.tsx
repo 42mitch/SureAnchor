@@ -430,6 +430,188 @@ function EditDonationModal({
   );
 }
 
+// ─── Add Donation Modal ───────────────────────────────────────────────────────
+
+function AddDonationModal({
+  supporterId,
+  supporterName,
+  onClose,
+  onSaved,
+}: {
+  supporterId: number;
+  supporterName: string;
+  onClose: () => void;
+  onSaved: (d: DonationRow) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
+  const [form, setForm] = useState({
+    donationType: 'Monetary',
+    donationDate: new Date().toISOString().slice(0, 10),
+    isRecurring: false,
+    campaignName: '',
+    channelSource: '',
+    currencyCode: 'PHP',
+    amount: '',
+    estimatedValue: '',
+    impactUnit: '',
+    notes: '',
+  });
+
+  function set(key: string, value: string | boolean) {
+    setForm(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const formEl = e.currentTarget as HTMLFormElement;
+    if (!formEl.checkValidity()) { formEl.reportValidity(); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    if (form.donationDate > today) {
+      setValidationMsg('Donation date cannot be in the future.');
+      return;
+    }
+    const amount = form.amount.trim() === '' ? null : parseFloat(form.amount);
+    const estimatedValue = form.estimatedValue.trim() === '' ? null : parseFloat(form.estimatedValue);
+    if ((amount != null && amount < 0) || (estimatedValue != null && estimatedValue < 0)) {
+      setValidationMsg('Amount and estimated value cannot be negative.');
+      return;
+    }
+    setSaving(true);
+    const res = await apiFetch('/api/donations', {
+      method: 'POST',
+      body: JSON.stringify({
+        supporterId,
+        donationType: form.donationType,
+        donationDate: form.donationDate,
+        isRecurring: form.isRecurring,
+        campaignName: form.campaignName.trim() || null,
+        channelSource: form.channelSource.trim() || null,
+        currencyCode: form.currencyCode.trim() || 'PHP',
+        amount: Number.isFinite(amount as number) ? amount : null,
+        estimatedValue: Number.isFinite(estimatedValue as number) ? estimatedValue : null,
+        impactUnit: form.impactUnit.trim() || null,
+        notes: form.notes.trim() || null,
+      }),
+    });
+    if (res.ok) {
+      const { donationId } = await res.json();
+      onSaved({
+        donationId,
+        donationType: form.donationType,
+        donationDate: form.donationDate,
+        isRecurring: form.isRecurring,
+        campaignName: form.campaignName.trim() || null,
+        channelSource: form.channelSource.trim() || null,
+        currencyCode: form.currencyCode.trim() || 'PHP',
+        amount: Number.isFinite(amount as number) ? amount : null,
+        estimatedValue: Number.isFinite(estimatedValue as number) ? estimatedValue : null,
+        impactUnit: form.impactUnit.trim() || null,
+        notes: form.notes.trim() || null,
+      });
+      onClose();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setValidationMsg(d.error ?? d.message ?? 'Failed to save donation.');
+    }
+    setSaving(false);
+  }
+
+  return (
+    <>
+      {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in">
+          <div className="sticky top-0 bg-white rounded-t-3xl px-6 py-5 border-b border-dark/8 flex items-center justify-between z-10">
+            <div>
+              <h2 className="font-display text-xl font-bold text-navy">Add Donation</h2>
+              <p className="text-xs text-dark/40 mt-0.5">{supporterName}</p>
+            </div>
+            <button type="button" onClick={onClose} className="text-dark/35 hover:text-dark hover:bg-dark/6 rounded-lg p-1.5 transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+          <form className="p-6 space-y-4" onSubmit={handleSubmit}>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Type</label>
+                <select value={form.donationType} onChange={e => set('donationType', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                  {['Monetary', 'InKind', 'Time', 'Skills', 'SocialMedia'].map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Date *</label>
+                <input type="date" required value={form.donationDate} onChange={e => set('donationDate', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-dark/70 cursor-pointer">
+                  <input type="checkbox" checked={form.isRecurring} onChange={e => set('isRecurring', e.target.checked)} className="w-4 h-4 accent-teal" />
+                  Recurring donation
+                </label>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Campaign name</label>
+                <input value={form.campaignName} onChange={e => set('campaignName', e.target.value)}
+                  placeholder="e.g. Year-end giving drive"
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Channel</label>
+                <select value={form.channelSource} onChange={e => set('channelSource', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                  <option value="">—</option>
+                  {['Website', 'SocialMedia', 'Event', 'Direct', 'WordOfMouth', 'PartnerReferral', 'Church'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Currency</label>
+                <input value={form.currencyCode} onChange={e => set('currencyCode', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Amount</label>
+                <input type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)}
+                  placeholder="Leave empty for in-kind/time"
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Est. value (PHP)</label>
+                <input type="number" step="0.01" min="0" value={form.estimatedValue} onChange={e => set('estimatedValue', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Impact unit</label>
+                <input value={form.impactUnit} onChange={e => set('impactUnit', e.target.value)} placeholder="e.g. pesos, hours, meals"
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Notes</label>
+                <textarea rows={3} value={form.notes} onChange={e => set('notes', e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none" />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={onClose}
+                className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving}
+                className="flex-1 btn-primary text-sm disabled:opacity-60">
+                {saving ? 'Saving...' : 'Add Donation'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Donor Detail Modal ───────────────────────────────────────────────────────
 
 function DonorDetailModal({
@@ -448,6 +630,7 @@ function DonorDetailModal({
   const [detail, setDetail] = useState<SupporterDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingDonation, setEditingDonation] = useState<DonationRow | null>(null);
+  const [addingDonation, setAddingDonation] = useState(false);
   const [editingSupporter, setEditingSupporter] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SupporterDetail | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -588,13 +771,23 @@ function DonorDetailModal({
 
             {/* Donation History */}
             <div>
-              <h3 className="font-display text-base font-semibold text-navy mb-3 flex items-center gap-2">
-                <HeartHandshake size={16} className="text-gold" />
-                Donation History
-                <span className="text-xs font-normal text-dark/40 bg-dark/6 px-2 py-0.5 rounded-full ml-1">
-                  {detail.donations.length} {detail.donations.length === 1 ? 'donation' : 'donations'}
-                </span>
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display text-base font-semibold text-navy flex items-center gap-2">
+                  <HeartHandshake size={16} className="text-gold" />
+                  Donation History
+                  <span className="text-xs font-normal text-dark/40 bg-dark/6 px-2 py-0.5 rounded-full ml-1">
+                    {detail.donations.length} {detail.donations.length === 1 ? 'donation' : 'donations'}
+                  </span>
+                </h3>
+                {isAdmin && (
+                  <button
+                    onClick={() => setAddingDonation(true)}
+                    className="btn-primary flex items-center gap-1.5 text-sm py-2 px-3"
+                  >
+                    <Plus size={14} /> Add Donation
+                  </button>
+                )}
+              </div>
 
               {detail.donations.length === 0 ? (
                 <div className="bg-cream/60 rounded-2xl py-8 text-center text-dark/40 text-sm">
@@ -689,6 +882,20 @@ function DonorDetailModal({
           </div>
         )}
       </div>
+
+      {addingDonation && detail && (
+        <AddDonationModal
+          supporterId={detail.supporterId}
+          supporterName={detail.displayName}
+          onClose={() => setAddingDonation(false)}
+          onSaved={newDonation => {
+            setDetail(prev =>
+              prev ? { ...prev, donations: [newDonation, ...prev.donations] } : null
+            );
+            onDonationsUpdated?.();
+          }}
+        />
+      )}
 
       {editingDonation && detail && (
         <EditDonationModal
