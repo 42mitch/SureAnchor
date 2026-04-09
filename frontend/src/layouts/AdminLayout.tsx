@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, Home, HeartHandshake,
   BarChart2, Settings, LogOut, Menu, ChevronRight, ShieldAlert,
-  UserCog, UserCircle, Share2
+  UserCog, UserCircle, Share2, Building2
 } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
@@ -33,6 +33,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         { label: 'Donors',            href: '/admin/donors',            icon: HeartHandshake },
         { label: 'Reports',           href: '/admin/reports',           icon: BarChart2 },
         { label: 'Social Media',      href: '/admin/social-media',      icon: Share2 },
+        { label: 'Funding Impact',    href: '/admin/safehouse-impact',  icon: Building2 },
       ]
     : [
         { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
@@ -213,10 +214,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <Menu size={20} />
             </button>
             <div className="text-sm font-medium text-dark/50">
-              {isActive('/admin/safety')          ? 'Safety Monitor'
-                : isActive('/admin/staff-accounts') ? 'Staff Accounts'
-                : isActive('/admin/my-account')     ? 'My Account'
-                : isActive('/admin/social-media')   ? 'Social Media'
+              {isActive('/admin/safety')             ? 'Safety Monitor'
+                : isActive('/admin/staff-accounts')  ? 'Staff Accounts'
+                : isActive('/admin/my-account')      ? 'My Account'
+                : isActive('/admin/social-media')    ? 'Social Media'
+                : isActive('/admin/safehouse-impact') ? 'Funding Impact'
                 : navItems.find(n => isActive(n.href))?.label || 'Admin'}
             </div>
           </div>

@@ -22,6 +22,7 @@ import StaffAccountsPage from './pages/StaffAccountsPage';
 import MyAccountPage from './pages/MyAccountPage';
 import DonorMyAccountPage from './pages/DonorMyAccountPage';
 import SocialMediaPage from './pages/SocialMediaPage';
+import SafehouseImpactPage from './pages/SafehouseImpactPage';
 
 function App() {
   return (
@@ -95,6 +96,11 @@ function App() {
           <Route path="/admin/social-media" element={
             <RequireAuth roles={['Admin']}>
               <SocialMediaPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/safehouse-impact" element={
+            <RequireAuth roles={['Admin']}>
+              <SafehouseImpactPage />
             </RequireAuth>
           } />
 

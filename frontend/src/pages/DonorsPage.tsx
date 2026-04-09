@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  HeartHandshake, Users, Sparkles, Plus, X, Trash2, Search,
-  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil
+  HeartHandshake, Users, UserCircle, Sparkles, Plus, X, Trash2, Search,
+  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil, Brain
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -682,6 +682,21 @@ function AddDonationModal({
   );
 }
 
+interface DonorChurnProfile {
+  available: boolean;
+  reason?: string;
+  churn_probability?: number;
+  risk_tier?: string;
+  recommended_action?: string;
+}
+
+const CHURN_TIER_BADGE: Record<string, string> = {
+  Critical: 'bg-red-100 text-red-700',
+  High: 'bg-orange-100 text-orange-800',
+  Medium: 'bg-amber-100 text-amber-900',
+  Low: 'bg-green-100 text-green-700',
+};
+
 // ─── Donor Detail Modal ───────────────────────────────────────────────────────
 
 function DonorDetailModal({
@@ -704,12 +719,31 @@ function DonorDetailModal({
   const [editingSupporter, setEditingSupporter] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SupporterDetail | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [churnRisk, setChurnRisk] = useState<DonorChurnProfile | null>(null);
+  const [churnLoading, setChurnLoading] = useState(true);
 
   useEffect(() => {
     apiFetch(`/api/supporters/${supporterId}`)
       .then(r => r.ok ? r.json() : null)
       .then(setDetail)
       .finally(() => setLoading(false));
+  }, [supporterId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setChurnLoading(true);
+    setChurnRisk(null);
+    apiFetch(`/api/ml/donor-churn/${supporterId}`)
+      .then(r => (r.ok ? r.json() : { available: false, reason: 'Could not load churn risk' }))
+      .then((data: DonorChurnProfile) => {
+        if (!cancelled) setChurnRisk(data);
+      })
+      .finally(() => {
+        if (!cancelled) setChurnLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [supporterId]);
 
   const donationList = detail?.donations ?? [];
@@ -817,6 +851,55 @@ function DonorDetailModal({
 
             {/* Contact & Info */}
             <div className="grid sm:grid-cols-2 gap-4">
+              <div className="flex items-start gap-3 bg-cream/60 rounded-xl px-4 py-3 sm:col-span-2">
+                <div className="w-7 h-7 rounded-lg bg-navy/8 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <UserCircle size={13} className="text-navy" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide">Donor status</p>
+                  <span
+                    className={`inline-flex mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                      detail.status === 'Active'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    {detail.status}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 bg-navy/5 rounded-xl px-4 py-3 sm:col-span-2 border border-navy/10">
+                <div className="w-7 h-7 rounded-lg bg-navy/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Brain size={13} className="text-navy" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide">Churn risk (model)</p>
+                  {churnLoading ? (
+                    <p className="text-sm text-dark/45 mt-1.5">Loading prediction…</p>
+                  ) : !churnRisk?.available ? (
+                    <p className="text-sm text-dark/45 mt-1.5">{churnRisk?.reason ?? 'Prediction unavailable'}</p>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                            CHURN_TIER_BADGE[churnRisk.risk_tier ?? ''] ?? 'bg-dark/10 text-dark/60'
+                          }`}
+                        >
+                          {churnRisk.risk_tier ?? '—'}
+                        </span>
+                        <span className="text-sm font-bold text-navy">
+                          {Math.round((churnRisk.churn_probability ?? 0) * 100)}% churn probability
+                        </span>
+                      </div>
+                      {churnRisk.recommended_action && (
+                        <p className="text-xs text-dark/55 leading-relaxed">{churnRisk.recommended_action}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
               {[
                 detail.email            && { icon: Mail,      label: 'Email',            value: detail.email },
                 detail.phone            && { icon: Phone,     label: 'Phone',            value: detail.phone },

@@ -559,23 +559,30 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* ML: Safehouse Resource Impact */}
+            {/* ML: Funding Impact — compact overview card */}
             {safehouseResult === null ? (
               <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
                 <Brain size={16} className="text-dark/30" />
                 <span className="text-xs text-dark/35 font-medium">Loading safehouse resource predictions…</span>
               </div>
             ) : !safehouseResult.available ? (
-              <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-2 text-dark/40">
-                <Cpu size={16} strokeWidth={1.8} />
-                <span className="text-xs font-bold uppercase tracking-widest">ML Pipeline</span>
-                <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">Unavailable</span>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3">
+                <Brain size={15} className="text-amber-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-amber-700">ML · Funding Impact — Unavailable</p>
+                  <p className="text-xs text-amber-600 mt-0.5 truncate">{safehouseResult.reason ?? 'ML service not connected.'}</p>
+                </div>
               </div>
             ) : (
               <div className="rounded-2xl border border-navy/12 bg-navy/3 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Brain size={15} className="text-navy" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Safehouse Education Forecast</span>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Brain size={14} className="text-navy" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Funding Impact</span>
+                  </div>
+                  <a href="/admin/safehouse-impact" className="text-xs font-semibold text-teal hover:text-teal-dark">
+                    Full analysis →
+                  </a>
                 </div>
                 <div className="space-y-2">
                   {(safehouseResult.predictions ?? []).map(sh => (
@@ -591,7 +598,12 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-dark/35 mt-3">Predicted avg education progress next month based on current funding allocation.</p>
+                <a
+                  href="/admin/safehouse-impact"
+                  className="mt-3 flex items-center justify-center gap-1.5 w-full rounded-xl border border-navy/12 bg-white/60 hover:bg-white py-2 text-xs font-semibold text-navy/70 hover:text-navy transition-colors"
+                >
+                  Allocation Simulator &amp; Full Impact Analysis →
+                </a>
               </div>
             )}
 

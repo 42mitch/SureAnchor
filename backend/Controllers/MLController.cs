@@ -380,55 +380,63 @@ public class MLController : ControllerBase
             .Include(s => s.Donations)
             .ToListAsync();
 
-        var donorFeatures = supporters.Select(s =>
-        {
-            var dons = s.Donations.ToList();
-            var monetary = dons.Where(d => d.Amount.HasValue).ToList();
-            var lastDon = dons.OrderByDescending(d => d.DonationDate).FirstOrDefault();
-            double daysSinceLast = lastDon != null
-                ? (today.DayNumber - lastDon.DonationDate.DayNumber) : 9999;
-            double totalValue = monetary.Sum(d => (double)d.Amount!.Value);
-            int totalDons = dons.Count;
-            double avgValue = totalDons > 0 && monetary.Count > 0
-                ? totalValue / monetary.Count : 0;
-            int isRecurring = dons.Any(d => d.IsRecurring) ? 1 : 0;
-            int uniqueTypes = dons.Select(d => d.DonationType).Distinct().Count();
-            double tenure = s.FirstDonationDate.HasValue
-                ? (today.DayNumber - s.FirstDonationDate.Value.DayNumber) : 0;
-            string mostCommonChannel = dons
-                .GroupBy(d => d.ChannelSource ?? "Direct")
-                .OrderByDescending(g => g.Count())
-                .Select(g => g.Key).FirstOrDefault() ?? "Direct";
-            string mostCommonCampaign = dons
-                .GroupBy(d => d.CampaignName ?? "General")
-                .OrderByDescending(g => g.Count())
-                .Select(g => g.Key).FirstOrDefault() ?? "General";
-
-            return new
-            {
-                supporter_id = s.SupporterId,
-                display_name = s.DisplayName,
-                email = s.Email,
-                days_since_last_donation = daysSinceLast,
-                total_donations = totalDons,
-                total_monetary_value = totalValue,
-                avg_donation_value = avgValue,
-                is_recurring = isRecurring,
-                unique_donation_types = uniqueTypes,
-                tenure_days = tenure,
-                most_common_channel = mostCommonChannel,
-                most_common_campaign = mostCommonCampaign,
-                supporter_type = s.SupporterType,
-                relationship_type = s.RelationshipType ?? "Donor",
-                acquisition_channel = s.AcquisitionChannel ?? "Direct",
-            };
-        }).ToList();
+        var donorFeatures = supporters.Select(s => BuildDonorChurnFeatureDto(s, today)).ToList();
 
         var result = await PostToMl<JsonElement?>("/predict/donor-churn", new { donors = donorFeatures });
         if (result == null)
             return Ok(new { available = false, reason = "ML service unavailable" });
 
         return Ok(result);
+    }
+
+    // =========================================================================
+    // Donor churn for one supporter (donor profile)
+    // GET /api/ml/donor-churn/{supporterId}
+    // =========================================================================
+    [HttpGet("donor-churn/{supporterId:int}")]
+    public async Task<IActionResult> GetDonorChurnForSupporter(int supporterId)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var s = await _db.Supporters
+            .Include(x => x.Donations)
+            .FirstOrDefaultAsync(x => x.SupporterId == supporterId);
+        if (s == null) return NotFound();
+
+        var donorRow = BuildDonorChurnFeatureDto(s, today);
+        var result = await PostToMl<JsonElement?>("/predict/donor-churn", new { donors = new[] { donorRow } });
+        if (result == null)
+            return Ok(new { available = false, reason = "ML service unavailable" });
+
+        var root = result.Value;
+        if (root.TryGetProperty("available", out var okProp) && okProp.ValueKind == JsonValueKind.False)
+        {
+            var reason = root.TryGetProperty("reason", out var r) ? r.GetString() : "ML unavailable";
+            return Ok(new { available = false, reason });
+        }
+
+        if (!root.TryGetProperty("predictions", out var preds) || preds.ValueKind != JsonValueKind.Array)
+            return Ok(new { available = false, reason = "Invalid ML response" });
+
+        foreach (var p in preds.EnumerateArray())
+        {
+            if (!p.TryGetProperty("supporter_id", out var sid) || sid.GetInt32() != supporterId)
+                continue;
+
+            var churn = p.TryGetProperty("churn_probability", out var cp) ? cp.GetDouble() : 0d;
+            var tier = p.TryGetProperty("risk_tier", out var rt) ? rt.GetString() : null;
+            var action = p.TryGetProperty("recommended_action", out var ra) ? ra.GetString() : null;
+            return Ok(new
+            {
+                available = true,
+                supporter_id = supporterId,
+                churn_probability = churn,
+                risk_tier = tier,
+                recommended_action = action,
+            });
+        }
+
+        return Ok(new { available = false, reason = "No prediction returned for this supporter" });
     }
 
     // =========================================================================
@@ -630,6 +638,323 @@ public class MLController : ControllerBase
 
         return Ok(result);
     }
+
+    // =========================================================================
+    // Safehouse Funding Impact — enriched breakdown + ML predictions
+    // GET /api/ml/safehouse-funding-impact
+    // =========================================================================
+    [HttpGet("safehouse-funding-impact")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetSafehouseFundingImpact()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var safehouses = await _db.Safehouses
+            .Where(s => s.Status == "Active")
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+
+        var metrics = await _db.SafehouseMonthlyMetrics
+            .OrderByDescending(m => m.MonthStart)
+            .ToListAsync();
+
+        var allocations = await _db.DonationAllocations
+            .Include(a => a.Donation)
+            .ToListAsync();
+
+        // ── Build per-safehouse enriched info + ML feature vectors ──────────
+        var enriched = new List<object>();
+        var featureVectors = new List<object>();
+
+        foreach (var sh in safehouses)
+        {
+            var shMetrics = metrics.Where(m => m.SafehouseId == sh.SafehouseId).ToList();
+            var curr = shMetrics.FirstOrDefault();
+            var prev = shMetrics.Skip(1).FirstOrDefault();
+
+            double avgEd   = (double)(curr?.AvgEducationProgress ?? 70);
+            double avgHl   = (double)(curr?.AvgHealthScore ?? 3);
+            int    incidents = curr?.IncidentCount ?? 0;
+            int    residents = curr?.ActiveResidents ?? sh.CurrentOccupancy;
+
+            double avgEdPrev = prev?.AvgEducationProgress.HasValue == true ? (double)prev.AvgEducationProgress.Value : avgEd;
+            double avgHlPrev = prev?.AvgHealthScore.HasValue == true       ? (double)prev.AvgHealthScore.Value       : avgHl;
+
+            var shAllocs = allocations.Where(a => a.SafehouseId == sh.SafehouseId).ToList();
+            double fundEd    = shAllocs.Where(a => a.ProgramArea == "Educational").Sum(a => (double)a.AmountAllocated);
+            double fundWell  = shAllocs.Where(a => a.ProgramArea == "Health" || a.ProgramArea == "Psychosocial").Sum(a => (double)a.AmountAllocated);
+            double fundOps   = shAllocs.Where(a => a.ProgramArea == "Operations" || a.ProgramArea == "Shelter").Sum(a => (double)a.AmountAllocated);
+            double fundTrans = shAllocs.Where(a => a.ProgramArea == "Transport").Sum(a => (double)a.AmountAllocated);
+            double fundMaint = shAllocs.Where(a => a.ProgramArea == "Maintenance").Sum(a => (double)a.AmountAllocated);
+            double fundOut   = shAllocs.Where(a => a.ProgramArea == "Outreach").Sum(a => (double)a.AmountAllocated);
+            double total     = fundEd + fundWell + fundOps + fundTrans + fundMaint + fundOut;
+            if (total == 0) total = 1;
+
+            double shAge = (today.DayNumber - sh.OpenDate.DayNumber) / 30.44;
+
+            enriched.Add(new
+            {
+                safehouseId      = sh.SafehouseId,
+                safehouseName    = sh.Name,
+                city             = sh.City,
+                region           = sh.Region,
+                activeResidents  = residents,
+                totalFunding     = Math.Round(total),
+                fundingPerResident = Math.Round(residents > 0 ? total / residents : 0),
+                currentEducationProgress = Math.Round(avgEd, 1),
+                currentHealthScore       = Math.Round(avgHl, 2),
+                pctEducation   = Math.Round(fundEd   / total * 100, 1),
+                pctWellbeing   = Math.Round(fundWell  / total * 100, 1),
+                pctOperations  = Math.Round(fundOps   / total * 100, 1),
+                pctTransport   = Math.Round(fundTrans / total * 100, 1),
+                pctMaintenance = Math.Round(fundMaint / total * 100, 1),
+                pctOutreach    = Math.Round(fundOut   / total * 100, 1),
+                fundingEducation  = Math.Round(fundEd),
+                fundingWellbeing  = Math.Round(fundWell),
+                fundingOperations = Math.Round(fundOps),
+            });
+
+            featureVectors.Add(new
+            {
+                safehouse_id   = sh.SafehouseId,
+                safehouse_name = sh.Name,
+                funding_education   = fundEd,   funding_wellbeing   = fundWell,
+                funding_operations  = fundOps,  funding_transport   = fundTrans,
+                funding_maintenance = fundMaint, funding_outreach    = fundOut,
+                funding_per_resident = residents > 0 ? total / residents : 0,
+                pct_education  = fundEd  / total, pct_wellbeing  = fundWell / total, pct_operations = fundOps / total,
+                education_funding_lag1 = fundEd, wellbeing_funding_lag1 = fundWell, total_funding_lag1 = total,
+                funding_trend = 0.0, funding_consistency_3mo = 1.0,
+                pct_monetary = 1.0, pct_inkind = 0.0, pct_time = 0.0, has_recurring_funding = 0,
+                unique_donors_this_month = shAllocs.Select(a => a.Donation.SupporterId).Distinct().Count(),
+                active_residents = residents,
+                occupancy_rate = sh.CapacityGirls > 0 ? residents / (double)sh.CapacityGirls : 0.5,
+                sessions_per_resident = 0.0, visits_per_resident = 0.0,
+                incident_count_current = incidents,
+                avg_education_progress_current = avgEd,
+                avg_health_score_current = avgHl,
+                capacity_girls = sh.CapacityGirls,
+                safehouse_age_months = shAge,
+                status_active = 1,
+                education_progress_lag1 = avgEdPrev, health_score_lag1 = avgHlPrev,
+                incident_rate_lag1 = 0.0,
+                education_trend_3mo = avgEd - avgEdPrev,
+                health_trend_3mo    = avgHl - avgHlPrev,
+            });
+        }
+
+        if (!safehouses.Any())
+            return Ok(new { available = true, safehouses = Array.Empty<object>() });
+
+        // ── Call ML ──────────────────────────────────────────────────────────
+        var mlResult = await PostToMl<JsonElement?>("/predict/safehouse-resources", new { safehouses = featureVectors });
+
+        // ── Merge ML predictions into enriched records ────────────────────────
+        var predByShId = new Dictionary<int, (double predicted, double delta)>();
+        bool mlOk = false;
+        if (mlResult.HasValue && mlResult.Value.TryGetProperty("predictions", out var predsEl))
+        {
+            mlOk = true;
+            foreach (var p in predsEl.EnumerateArray())
+            {
+                int   shId      = p.TryGetProperty("safehouse_id",                  out var idEl)  ? idEl.GetInt32()    : 0;
+                double predicted = p.TryGetProperty("predicted_education_progress",  out var prEl)  ? prEl.GetDouble()   : 0;
+                double delta     = p.TryGetProperty("delta",                         out var dtEl)  ? dtEl.GetDouble()   : 0;
+                if (shId > 0) predByShId[shId] = (Math.Round(predicted, 1), Math.Round(delta, 1));
+            }
+        }
+
+        // Rebuild enriched list with ML fields merged in
+        var merged = safehouses.Select((sh, i) =>
+        {
+            var e = (dynamic)enriched[i];
+            int id = sh.SafehouseId;
+            var (predicted, delta) = predByShId.TryGetValue(id, out var p) ? p : (e.currentEducationProgress, 0.0);
+            string trend = delta >= 2 ? "Improving" : delta <= -2 ? "Declining" : "Stable";
+            string narrative = delta >= 3 ? $"Strong projected gain of {delta:+0.0;-0.0}% — current allocation is working well."
+                : delta >= 0 ? $"Marginal projected gain ({delta:+0.0;-0.0}%) — allocation is adequate."
+                : delta >= -2 ? $"Slight projected decline ({delta:+0.0;-0.0}%) — consider shifting more funding to education."
+                : $"Projected decline of {Math.Abs(delta):0.0}% — reallocation recommended.";
+
+            return new
+            {
+                e.safehouseId, e.safehouseName, e.city, e.region,
+                e.activeResidents, e.totalFunding, e.fundingPerResident,
+                e.currentEducationProgress, e.currentHealthScore,
+                e.pctEducation, e.pctWellbeing, e.pctOperations, e.pctTransport, e.pctMaintenance, e.pctOutreach,
+                e.fundingEducation, e.fundingWellbeing, e.fundingOperations,
+                predictedEducationProgress = predicted,
+                delta, trend, narrative,
+                mlAvailable = mlOk,
+            };
+        }).OrderByDescending(x => x.delta).ToList();
+
+        double totalFundingAll   = merged.Sum(x => (double)x.totalFunding);
+        double avgCurrentProg    = merged.Any() ? merged.Average(x => (double)x.currentEducationProgress) : 0;
+        double avgPredictedProg  = merged.Any() ? merged.Average(x => (double)x.predictedEducationProgress) : 0;
+
+        return Ok(new
+        {
+            available = true,
+            mlAvailable = mlOk,
+            safehouses = merged,
+            summary = new
+            {
+                totalFunding       = Math.Round(totalFundingAll),
+                avgCurrentProgress = Math.Round(avgCurrentProg, 1),
+                avgPredictedProgress = Math.Round(avgPredictedProg, 1),
+                activeSafehouses   = merged.Count,
+            }
+        });
+    }
+
+    // =========================================================================
+    // Safehouse Allocation Simulator
+    // POST /api/ml/safehouse-simulate
+    // =========================================================================
+    [HttpPost("safehouse-simulate")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> SimulateSafehouseAllocation([FromBody] SafehouseSimRequest req)
+    {
+        var safehouse = await _db.Safehouses.FindAsync(req.SafehouseId);
+        if (safehouse == null) return NotFound(new { message = "Safehouse not found" });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var shMetrics = await _db.SafehouseMonthlyMetrics
+            .Where(m => m.SafehouseId == req.SafehouseId)
+            .OrderByDescending(m => m.MonthStart)
+            .ToListAsync();
+
+        var curr = shMetrics.FirstOrDefault();
+        var prev = shMetrics.Skip(1).FirstOrDefault();
+
+        double avgEd     = (double)(curr?.AvgEducationProgress ?? 70);
+        double avgHl     = (double)(curr?.AvgHealthScore ?? 3);
+        int    incidents = curr?.IncidentCount ?? 0;
+        int    residents = curr?.ActiveResidents ?? safehouse.CurrentOccupancy;
+
+        double avgEdPrev = prev?.AvgEducationProgress.HasValue == true ? (double)prev.AvgEducationProgress.Value : avgEd;
+        double avgHlPrev = prev?.AvgHealthScore.HasValue == true       ? (double)prev.AvgHealthScore.Value       : avgHl;
+
+        double total     = req.TotalBudget > 0 ? req.TotalBudget : 1;
+        double fundEd    = total * req.PctEducation   / 100.0;
+        double fundWell  = total * req.PctWellbeing   / 100.0;
+        double fundOps   = total * req.PctOperations  / 100.0;
+        double fundTrans = total * req.PctTransport   / 100.0;
+        double fundMaint = total * req.PctMaintenance / 100.0;
+        double fundOut   = total * req.PctOutreach    / 100.0;
+
+        double shAge = (today.DayNumber - safehouse.OpenDate.DayNumber) / 30.44;
+
+        var featureVector = new
+        {
+            safehouse_id   = safehouse.SafehouseId,
+            safehouse_name = safehouse.Name,
+            funding_education   = fundEd,   funding_wellbeing   = fundWell,
+            funding_operations  = fundOps,  funding_transport   = fundTrans,
+            funding_maintenance = fundMaint, funding_outreach    = fundOut,
+            funding_per_resident = residents > 0 ? total / residents : 0,
+            pct_education  = fundEd  / total, pct_wellbeing  = fundWell / total, pct_operations = fundOps / total,
+            education_funding_lag1 = fundEd, wellbeing_funding_lag1 = fundWell, total_funding_lag1 = total,
+            funding_trend = 0.0, funding_consistency_3mo = 1.0,
+            pct_monetary = 1.0, pct_inkind = 0.0, pct_time = 0.0, has_recurring_funding = 0,
+            unique_donors_this_month = 0,
+            active_residents = residents,
+            occupancy_rate = safehouse.CapacityGirls > 0 ? residents / (double)safehouse.CapacityGirls : 0.5,
+            sessions_per_resident = 0.0, visits_per_resident = 0.0,
+            incident_count_current = incidents,
+            avg_education_progress_current = avgEd,
+            avg_health_score_current = avgHl,
+            capacity_girls = safehouse.CapacityGirls,
+            safehouse_age_months = shAge,
+            status_active = 1,
+            education_progress_lag1 = avgEdPrev, health_score_lag1 = avgHlPrev,
+            incident_rate_lag1 = 0.0,
+            education_trend_3mo = avgEd - avgEdPrev,
+            health_trend_3mo    = avgHl - avgHlPrev,
+        };
+
+        var mlResult = await PostToMl<JsonElement?>("/predict/safehouse-resources", new { safehouses = new[] { featureVector } });
+        if (mlResult == null)
+            return Ok(new { available = false, reason = "ML service unavailable" });
+
+        double projected = avgEd;
+        if (mlResult.Value.TryGetProperty("predictions", out var preds) && preds.GetArrayLength() > 0)
+            projected = preds[0].TryGetProperty("predicted_education_progress", out var pe) ? pe.GetDouble() : avgEd;
+        else if (!mlResult.Value.TryGetProperty("predictions", out _))
+            return Ok(new { available = false, reason = "No prediction returned from ML service" });
+
+        double delta = projected - avgEd;
+
+        // Confidence: lower if any single area > 70% (extreme) or budget is tiny
+        double maxPct = new[] { req.PctEducation, req.PctWellbeing, req.PctOperations, req.PctTransport, req.PctMaintenance, req.PctOutreach }.Max();
+        string confidence = maxPct > 75 ? "Low" : maxPct > 55 ? "Medium" : "High";
+
+        string recommendation = delta >= 4
+            ? "Strong projected improvement. This allocation prioritizes high-impact areas effectively."
+            : delta >= 1
+            ? "Modest projected improvement. This allocation is balanced and sustainable."
+            : delta >= -1
+            ? "Neutral projection. Consider shifting 5–10% toward Education or Wellbeing for better outcomes."
+            : "Projected decline. Recommend increasing Education and Wellbeing funding and reducing lower-impact areas.";
+
+        return Ok(new
+        {
+            available  = true,
+            safehouseId   = safehouse.SafehouseId,
+            safehouseName = safehouse.Name,
+            currentEducationProgress   = Math.Round(avgEd, 1),
+            projectedEducationProgress = Math.Round(projected, 1),
+            delta       = Math.Round(delta, 1),
+            confidence,
+            recommendation,
+        });
+    }
+
+    /// <summary>Feature row for /predict/donor-churn; must stay aligned with bulk GetDonorChurn.</summary>
+    private static object BuildDonorChurnFeatureDto(Supporter s, DateOnly today)
+    {
+        var dons = s.Donations.ToList();
+        var monetary = dons.Where(d => d.Amount.HasValue).ToList();
+        var lastDon = dons.OrderByDescending(d => d.DonationDate).FirstOrDefault();
+        double daysSinceLast = lastDon != null
+            ? (today.DayNumber - lastDon.DonationDate.DayNumber) : 9999;
+        double totalValue = monetary.Sum(d => (double)d.Amount!.Value);
+        int totalDons = dons.Count;
+        double avgValue = totalDons > 0 && monetary.Count > 0
+            ? totalValue / monetary.Count : 0;
+        int isRecurring = dons.Any(d => d.IsRecurring) ? 1 : 0;
+        int uniqueTypes = dons.Select(d => d.DonationType).Distinct().Count();
+        double tenure = s.FirstDonationDate.HasValue
+            ? (today.DayNumber - s.FirstDonationDate.Value.DayNumber) : 0;
+        string mostCommonChannel = dons
+            .GroupBy(d => d.ChannelSource ?? "Direct")
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key).FirstOrDefault() ?? "Direct";
+        string mostCommonCampaign = dons
+            .GroupBy(d => d.CampaignName ?? "General")
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key).FirstOrDefault() ?? "General";
+
+        return new
+        {
+            supporter_id = s.SupporterId,
+            display_name = s.DisplayName,
+            email = s.Email,
+            days_since_last_donation = daysSinceLast,
+            total_donations = totalDons,
+            total_monetary_value = totalValue,
+            avg_donation_value = avgValue,
+            is_recurring = isRecurring,
+            unique_donation_types = uniqueTypes,
+            tenure_days = tenure,
+            most_common_channel = mostCommonChannel,
+            most_common_campaign = mostCommonCampaign,
+            supporter_type = s.SupporterType,
+            relationship_type = s.RelationshipType ?? "Donor",
+            acquisition_channel = s.AcquisitionChannel ?? "Direct",
+        };
+    }
 }
 
 // DTO for social media post prediction input
@@ -657,4 +982,16 @@ public record SocialPostPredictRequest(
     int FollowerCountAtPost,
     int FeaturesResidentStory,
     int HasCallToAction
+);
+
+// DTO for safehouse allocation simulator
+public record SafehouseSimRequest(
+    int    SafehouseId,
+    double TotalBudget,
+    double PctEducation,
+    double PctWellbeing,
+    double PctOperations,
+    double PctTransport,
+    double PctMaintenance,
+    double PctOutreach
 );
