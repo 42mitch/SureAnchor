@@ -445,6 +445,14 @@ const UNIT_OPTIONS: { label: string; value: string; phpRate: number | null; isCu
   { label: 'Other',                value: 'Other', phpRate: null, isCurrency: false },
 ];
 
+/** Map frontend unit display values → DB-allowed impact_unit values */
+function toImpactUnit(unit: string): string | null {
+  if (['PHP', 'USD', 'EUR'].includes(unit)) return 'pesos';
+  if (['Hours', 'Days'].includes(unit))     return 'hours';
+  if (['Items', 'Meals', 'kg'].includes(unit)) return 'items';
+  return null; // 'Other' and unknown → NULL (allowed by constraint)
+}
+
 function AddDonationModal({
   supporterId,
   supporterName,
@@ -512,7 +520,7 @@ function AddDonationModal({
         currencyCode,
         amount:         monetaryAmount,
         estimatedValue: phpEstimate ?? null,
-        impactUnit:     form.unit,
+        impactUnit:     toImpactUnit(form.unit),
         notes:          form.notes.trim() || null,
       }),
     });
@@ -528,13 +536,16 @@ function AddDonationModal({
         currencyCode,
         amount:         monetaryAmount,
         estimatedValue: phpEstimate ?? null,
-        impactUnit:     form.unit,
+        impactUnit:     toImpactUnit(form.unit),
         notes:          form.notes.trim() || null,
       });
       onClose();
     } else {
       const d = await res.json().catch(() => ({}));
-      setValidationMsg(d.error ?? d.message ?? 'Failed to save donation.');
+      const msg = d.error ?? d.message ?? 'Failed to save donation.';
+      const detail = d.detail ? `\n\nDetail: ${d.detail}` : '';
+      const stage  = d.stage  ? ` (stage: ${d.stage})`   : '';
+      setValidationMsg(`${msg}${stage}${detail}`);
     }
     setSaving(false);
   }
