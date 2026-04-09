@@ -48,6 +48,27 @@ interface SafehousePrediction {
 }
 interface SafehouseResult { available: boolean; predictions?: SafehousePrediction[]; reason?: string; }
 
+interface SocialPlatformStat {
+  platform: string;
+  postCount: number;
+  avgEngagementRate: number;
+  totalReach: number;
+  totalDonationReferrals: number;
+  estimatedDonationValuePhp: number;
+}
+interface SocialContentStat {
+  postType: string;
+  postCount: number;
+  avgEngagementRate: number;
+  totalDonationReferrals: number;
+}
+interface SocialOverview {
+  available: boolean;
+  reason?: string;
+  byPlatform?: SocialPlatformStat[];
+  byContentType?: SocialContentStat[];
+}
+
 interface ResidentListDto {
   residentId: number;
   caseNo: string;
@@ -177,6 +198,7 @@ export default function AdminDashboard() {
   const [churnResult, setChurnResult] = useState<ChurnResult | null>(null);
   const [campaignResult, setCampaignResult] = useState<CampaignResult | null>(null);
   const [safehouseResult, setSafehouseResult] = useState<SafehouseResult | null>(null);
+  const [socialOverview, setSocialOverview] = useState<SocialOverview | null>(null);
   const [safehouses, setSafehouses] = useState<SafehouseDto[]>([]);
   const [loadingResidents, setLoadingResidents] = useState(true);
   const [loadingDonations, setLoadingDonations] = useState(true);
@@ -231,6 +253,11 @@ export default function AdminDashboard() {
       .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
       .then(setSafehouseResult)
       .catch(() => setSafehouseResult({ available: false, reason: 'ML service unavailable' }));
+
+    apiFetch('/api/social-analytics')
+      .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
+      .then(setSocialOverview)
+      .catch(() => setSocialOverview({ available: false, reason: 'Could not load social data' }));
   }, []);
 
   // ── Derived: Residents ──────────────────────────────────────────────────────
@@ -360,24 +387,27 @@ export default function AdminDashboard() {
     },
   ];
 
-  // Social media insights — real aggregations from social_media_posts table.
-  // Replace with /api/social-posts/insights when that endpoint is built.
-  const socialPlatformData = [
-    { platform: 'Instagram', eng: 10.61 },
-    { platform: 'Twitter', eng: 10.43 },
-    { platform: 'TikTok', eng: 9.87 },
-    { platform: 'YouTube', eng: 9.86 },
-    { platform: 'LinkedIn', eng: 9.83 },
-    { platform: 'Facebook', eng: 9.39 },
-    { platform: 'WhatsApp', eng: 9.17 },
-  ];
-  const socialTopicData = [
-    { topic: 'Safehouse Life', referrals: 1910 },
-    { topic: 'Health', referrals: 1515 },
-    { topic: 'Education', referrals: 1294 },
-    { topic: 'Awareness', referrals: 1227 },
-    { topic: 'Reintegration', referrals: 1212 },
-  ];
+  // Social overview — derived from live socialOverview state
+  const socialPlatformChart = (socialOverview?.byPlatform ?? [])
+    .slice(0, 6)
+    .map(p => ({ platform: p.platform, referrals: p.totalDonationReferrals, eng: p.avgEngagementRate }));
+
+  const socialContentChart = (socialOverview?.byContentType ?? [])
+    .slice(0, 5)
+    .map(c => ({
+      topic: c.postType.replace(/([A-Z])/g, ' $1').trim(),
+      referrals: c.totalDonationReferrals,
+    }));
+
+  const socialTotals = (socialOverview?.byPlatform ?? []).reduce(
+    (acc, p) => ({
+      posts: acc.posts + p.postCount,
+      reach: acc.reach + p.totalReach,
+      referrals: acc.referrals + p.totalDonationReferrals,
+      value: acc.value + p.estimatedDonationValuePhp,
+    }),
+    { posts: 0, reach: 0, referrals: 0, value: 0 },
+  );
 
   const loading = loadingResidents || loadingDonations || loadingSafehouses;
 
@@ -636,89 +666,104 @@ export default function AdminDashboard() {
         <Section title="Outreach" icon={Megaphone} accent="text-gold">
           <div className="space-y-6">
 
+            {/* Social Media Overview */}
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-widest text-dark/40 mb-3">
-                Social Media Insights <span className="normal-case font-normal text-dark/30">(aggregated from post history)</span>
-              </h3>
-              <div className="grid sm:grid-cols-3 gap-3 mb-5">
-                {[
-                  {
-                    label: 'Best Post Type',
-                    value: 'Impact Story',
-                    note: 'Drives 7,388 donation referrals — far ahead of any other type',
-                  },
-                  {
-                    label: 'Best Days to Post',
-                    value: 'Fri · Sat · Sun',
-                    note: 'Weekend posts average 10.4% engagement vs 9.5% on weekdays',
-                  },
-                  {
-                    label: 'Best Times',
-                    value: '7 PM · 8 PM',
-                    note: 'Evening posts reach up to 14.7% avg engagement rate',
-                  },
-                ].map(c => (
-                  <div key={c.label} className="rounded-2xl bg-navy/5 p-4">
-                    <div className="text-xs text-dark/40 mb-1 font-semibold uppercase tracking-wide">{c.label}</div>
-                    <div className="font-display text-lg font-bold text-navy">{c.value}</div>
-                    <div className="text-xs text-dark/50 mt-1">{c.note}</div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-dark/40">
+                  Social Media Overview
+                </h3>
+                <Link
+                  to="/admin/social-media"
+                  className="text-xs text-teal font-semibold hover:underline flex items-center gap-1"
+                >
+                  Full strategy &amp; guidance →
+                </Link>
               </div>
 
-              <div className="grid lg:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-xs text-dark/40 mb-3 font-semibold uppercase tracking-wide">
-                    Avg Engagement Rate by Platform
-                  </p>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={socialPlatformData} layout="vertical" barSize={10}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#00000008" />
-                      <XAxis type="number" domain={[8, 12]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                      <YAxis dataKey="platform" type="category" tick={{ fontSize: 11 }} width={72} />
-                      <Tooltip formatter={(v) => [`${(Number(v) || 0).toFixed(2)}%`, 'Engagement']} />
-                      <Bar dataKey="eng" radius={[0, 6, 6, 0]}>
-                        {socialPlatformData.map((entry, i) => (
-                          <Cell key={i} fill={PLATFORM_COLORS[entry.platform] || '#2D8F8A'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+              {/* Aggregate stat tiles */}
+              {socialOverview === null ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 animate-pulse">
+                  {[1,2,3,4].map(i => <div key={i} className="h-16 bg-dark/8 rounded-2xl" />)}
                 </div>
+              ) : !socialOverview.available ? (
+                <p className="text-xs text-dark/40 mb-5">{socialOverview.reason}</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  {[
+                    { label: 'Total Posts', value: socialTotals.posts.toLocaleString() },
+                    { label: 'Total Reach', value: socialTotals.reach >= 1000
+                        ? `${(socialTotals.reach / 1000).toFixed(1)}K`
+                        : socialTotals.reach.toLocaleString() },
+                    { label: 'Donation Referrals', value: socialTotals.referrals.toLocaleString() },
+                    { label: 'Est. Value from Social', value: socialTotals.value > 0
+                        ? `₱${socialTotals.value >= 1000
+                            ? `${(socialTotals.value / 1000).toFixed(1)}K`
+                            : socialTotals.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                        : '—' },
+                  ].map(t => (
+                    <div key={t.label} className="rounded-2xl bg-navy/5 p-3 text-center">
+                      <div className="font-display text-xl font-bold text-navy">{t.value}</div>
+                      <div className="text-xs text-dark/45 mt-0.5 font-medium">{t.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                <div>
-                  <p className="text-xs text-dark/40 mb-3 font-semibold uppercase tracking-wide">
-                    Topics That Drive Donations
-                  </p>
-                  <div className="space-y-3">
-                    {socialTopicData.map((t, i) => {
-                      const max = socialTopicData[0].referrals;
-                      const barColors = ['#2D8F8A', '#1B3A5C', '#D4A843', '#ea580c', '#16a34a'];
-                      return (
-                        <div key={t.topic}>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-dark/60 font-medium">{t.topic}</span>
-                            <span className="font-bold text-dark">{t.referrals.toLocaleString()} referrals</span>
-                          </div>
-                          <div className="h-1.5 bg-dark/8 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-700"
-                              style={{ width: `${(t.referrals / max) * 100}%`, backgroundColor: barColors[i] }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+              {/* Charts */}
+              {socialOverview?.available && (
+                <div className="grid lg:grid-cols-2 gap-6">
+                  {/* Donation referrals by platform */}
+                  <div>
+                    <p className="text-xs text-dark/40 mb-3 font-semibold uppercase tracking-wide">
+                      Donation Referrals by Platform
+                    </p>
+                    <ResponsiveContainer width="100%" height={190}>
+                      <BarChart data={socialPlatformChart} layout="vertical" barSize={10}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#00000008" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} />
+                        <YAxis dataKey="platform" type="category" tick={{ fontSize: 11 }} width={72} />
+                        <Tooltip formatter={(v) => [`${(Number(v) || 0).toLocaleString()}`, 'Referrals']} />
+                        <Bar dataKey="referrals" radius={[0, 6, 6, 0]}>
+                          {socialPlatformChart.map((entry, i) => (
+                            <Cell key={i} fill={PLATFORM_COLORS[entry.platform] || '#2D8F8A'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
-                  <p className="text-xs text-dark/30 mt-3 italic">
-                    💡 Safehouse Life &amp; Health posts consistently lead to donations — not just likes.
-                  </p>
+
+                  {/* Donation referrals by content type */}
+                  <div>
+                    <p className="text-xs text-dark/40 mb-3 font-semibold uppercase tracking-wide">
+                      Donation Referrals by Content Type
+                    </p>
+                    <div className="space-y-2.5 mt-1">
+                      {socialContentChart.map((t, i) => {
+                        const max = socialContentChart[0]?.referrals || 1;
+                        const barColors = ['#2D8F8A', '#1B3A5C', '#D4A843', '#ea580c', '#16a34a'];
+                        return (
+                          <div key={t.topic}>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-dark/60 font-medium">{t.topic}</span>
+                              <span className="font-bold text-dark">{t.referrals.toLocaleString()}</span>
+                            </div>
+                            <div className="h-1.5 bg-dark/8 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-700"
+                                style={{ width: `${(t.referrals / max) * 100}%`, backgroundColor: barColors[i] }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
+            {/* ML Campaign Ranker */}
             <div className="grid sm:grid-cols-2 gap-4">
-              {/* ML: Campaign Strategy Ranker */}
               {campaignResult === null ? (
                 <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
                   <Brain size={16} className="text-dark/30" />
@@ -761,31 +806,29 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* Social Media Optimizer — static insights (model requires live post input) */}
-              <div className="rounded-2xl border border-teal/20 bg-teal/4 p-5">
-                <div className="flex items-center gap-2 mb-4">
+              {/* Link to full Social Media Strategy page */}
+              <Link
+                to="/admin/social-media"
+                className="rounded-2xl border border-teal/20 bg-teal/4 p-5 flex flex-col justify-between hover:bg-teal/8 transition-colors group"
+              >
+                <div className="flex items-center gap-2 mb-3">
                   <BarChart2 size={15} className="text-teal" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Post Impact Model</span>
-                  <span className="ml-auto text-xs bg-teal/15 text-teal px-2 py-0.5 rounded-full font-semibold">Active</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-dark/40">Social Media Strategy</span>
                 </div>
-                <div className="space-y-2">
-                  {[
-                    { label: 'Best post type', value: 'Impact Story', note: 'Highest referral yield' },
-                    { label: 'Best platforms', value: 'Instagram · Twitter', note: '10.6% avg engagement' },
-                    { label: 'Best time', value: '7–9 PM weekends', note: 'Peak donation referrals' },
-                  ].map(r => (
-                    <div key={r.label} className="flex items-start justify-between gap-2">
-                      <span className="text-xs text-dark/45 font-medium flex-shrink-0">{r.label}</span>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-navy block">{r.value}</span>
-                        <span className="text-xs text-dark/35">{r.note}</span>
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <p className="text-sm font-semibold text-navy mb-1">
+                    View full posting strategy
+                  </p>
+                  <p className="text-xs text-dark/50">
+                    Best times, best content types, what drives donations vs. just likes, and when to post next.
+                  </p>
                 </div>
-                <p className="text-xs text-dark/35 mt-3">Live prediction per post available via the social media post entry form.</p>
-              </div>
+                <span className="mt-4 text-xs text-teal font-semibold group-hover:underline">
+                  Open Social Media Strategy →
+                </span>
+              </Link>
             </div>
+
           </div>
         </Section>
 
