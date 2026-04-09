@@ -854,6 +854,8 @@ export default function DonorsPage() {
   const [supporters, setSupporters] = useState<Supporter[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Supporter | null>(null);
@@ -876,12 +878,16 @@ export default function DonorsPage() {
     apiFetch('/api/supporters').then(r => r.ok ? r.json() : []).then(setSupporters);
   }
 
-  const filtered = supporters.filter(s => !search ||
-    s.displayName.toLowerCase().includes(search.toLowerCase()) ||
-    s.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = supporters.filter(s => {
+    const matchSearch = !search ||
+      s.displayName.toLowerCase().includes(search.toLowerCase()) ||
+      (s.email ?? '').toLowerCase().includes(search.toLowerCase());
+    const matchType = !typeFilter || s.supporterType === typeFilter;
+    const matchStatus = !statusFilter || s.status === statusFilter;
+    return matchSearch && matchType && matchStatus;
+  });
 
-  const donorsPag = useListPagination(filtered, [search]);
+  const donorsPag = useListPagination(filtered, [search, typeFilter, statusFilter]);
   const totalDonors = supporters.length;
   const activeDonors = supporters.filter(s => s.status === 'Active').length;
   const totalDonated = supporters.reduce((sum, s) => sum + s.totalDonated, 0);
@@ -926,13 +932,31 @@ export default function DonorsPage() {
           ))}
         </div>
 
-        {/* Search */}
-        <div className="card py-3.5">
-          <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name or email..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl border border-dark/10 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/25 focus:border-teal placeholder-dark/30" />
+        {/* Filters */}
+        <div className="card py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name or email..."
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30" />
+            </div>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+              <option value="">Supporter Type</option>
+              <option value="MonetaryDonor">Monetary Donor</option>
+              <option value="InKindDonor">In-Kind Donor</option>
+              <option value="Volunteer">Volunteer</option>
+              <option value="SkillsContributor">Skills Contributor</option>
+              <option value="SocialMediaAdvocate">Social Media Advocate</option>
+              <option value="PartnerOrganization">Partner Organization</option>
+            </select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+              <option value="">Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
           </div>
         </div>
 

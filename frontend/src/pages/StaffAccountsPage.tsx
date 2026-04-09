@@ -277,6 +277,8 @@ export default function StaffAccountsPage() {
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<StaffUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StaffUser | null>(null);
@@ -298,13 +300,18 @@ export default function StaffAccountsPage() {
     setDeleteLoading(false);
   }
 
-  const filtered = users.filter(u =>
-    !search ||
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    (u.displayName ?? '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = users.filter(u => {
+    const matchSearch = !search ||
+      u.email.toLowerCase().includes(search.toLowerCase()) ||
+      (u.displayName ?? '').toLowerCase().includes(search.toLowerCase());
+    const matchRole = !roleFilter ||
+      (roleFilter === 'Admin' ? u.roles.includes('Admin') : !u.roles.includes('Admin'));
+    const matchStatus = !statusFilter ||
+      (statusFilter === 'Locked' ? u.isLockedOut : !u.isLockedOut);
+    return matchSearch && matchRole && matchStatus;
+  });
 
-  const pag = useListPagination(filtered, [search]);
+  const pag = useListPagination(filtered, [search, roleFilter, statusFilter]);
   const adminCount = users.filter(u => u.roles.includes('Admin')).length;
   const staffCount = users.filter(u => !u.roles.includes('Admin')).length;
 
@@ -344,15 +351,27 @@ export default function StaffAccountsPage() {
           ))}
         </div>
 
-        {/* Search */}
-        <div className="card py-3.5">
-          <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
-            <input
-              type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name or email..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl border border-dark/10 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/25 focus:border-teal placeholder-dark/30"
-            />
+        {/* Filters */}
+        <div className="card py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name or email..."
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30" />
+            </div>
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+              <option value="">Role</option>
+              <option value="Admin">Admin</option>
+              <option value="Staff">Staff</option>
+            </select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+              <option value="">Account Status</option>
+              <option value="Active">Active</option>
+              <option value="Locked">Locked</option>
+            </select>
           </div>
         </div>
 

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, AlertTriangle, CheckCircle, FileText,
-  ChevronRight, User, ClipboardX, X,
+  ChevronRight, User, ClipboardX, X, Search,
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
@@ -334,6 +334,13 @@ export default function SafetyPage() {
 
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
+  // ── Filters ──────────────────────────────────────────────────────────────────
+  const [criticalSearch, setCriticalSearch] = useState('');
+  const [flagSearch, setFlagSearch] = useState('');
+  const [incidentSearch, setIncidentSearch] = useState('');
+  const [severityFilter, setSeverityFilter] = useState('');
+  const [incidentTypeFilter, setIncidentTypeFilter] = useState('');
+
   useEffect(() => {
     Promise.all([
       apiFetch('/api/process-recordings').then(r => r.ok ? r.json() : []),
@@ -383,9 +390,34 @@ export default function SafetyPage() {
 
   const totalAlerts = flags.length + incidents.length;
 
-  const criticalPag = useListPagination(criticalResidents, [criticalResidents.length]);
-  const flagsPag = useListPagination(flags, [flags.length]);
-  const incidentsPag = useListPagination(incidents, [incidents.length]);
+  const filteredCritical = criticalResidents.filter(r =>
+    !criticalSearch ||
+    r.internalCode.toLowerCase().includes(criticalSearch.toLowerCase()) ||
+    (r.worker ?? '').toLowerCase().includes(criticalSearch.toLowerCase()) ||
+    (r.safehouse ?? '').toLowerCase().includes(criticalSearch.toLowerCase())
+  );
+
+  const filteredFlags = flags.filter(f =>
+    !flagSearch ||
+    f.residentCode.toLowerCase().includes(flagSearch.toLowerCase()) ||
+    f.socialWorker.toLowerCase().includes(flagSearch.toLowerCase())
+  );
+
+  const filteredIncidents = incidents.filter(i => {
+    const matchSearch = !incidentSearch ||
+      i.residentCode.toLowerCase().includes(incidentSearch.toLowerCase()) ||
+      i.incidentType.toLowerCase().includes(incidentSearch.toLowerCase()) ||
+      (i.reportedBy ?? '').toLowerCase().includes(incidentSearch.toLowerCase());
+    const matchSeverity = !severityFilter || i.severity === severityFilter;
+    const matchType = !incidentTypeFilter || i.incidentType === incidentTypeFilter;
+    return matchSearch && matchSeverity && matchType;
+  });
+
+  const incidentTypeOptions = [...new Set(incidents.map(i => i.incidentType).filter(Boolean))].sort();
+
+  const criticalPag = useListPagination(filteredCritical, [criticalSearch]);
+  const flagsPag = useListPagination(filteredFlags, [flagSearch]);
+  const incidentsPag = useListPagination(filteredIncidents, [incidentSearch, severityFilter, incidentTypeFilter]);
 
   return (
     <AdminLayout>
@@ -423,7 +455,15 @@ export default function SafetyPage() {
                   <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">{criticalResidents.length}</span>
                 )}
               </div>
-              {criticalResidents.length === 0 ? (
+              {criticalResidents.length > 0 && (
+                <div className="mb-3 relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
+                  <input type="text" value={criticalSearch} onChange={e => setCriticalSearch(e.target.value)}
+                    placeholder="Search by resident, worker, or safehouse..."
+                    className="w-full sm:w-80 pl-8 pr-4 py-2 rounded-xl border border-dark/12 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+                </div>
+              )}
+              {filteredCritical.length === 0 ? (
                 <div className="card flex flex-col items-center py-10 text-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
                     <CheckCircle size={22} className="text-green-600" />
@@ -493,6 +533,14 @@ export default function SafetyPage() {
                     <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{flags.length}</span>
                   )}
                 </div>
+                {flags.length > 0 && (
+                  <div className="mb-3 relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
+                    <input type="text" value={flagSearch} onChange={e => setFlagSearch(e.target.value)}
+                      placeholder="Search by resident or worker..."
+                      className="w-full pl-8 pr-4 py-2 rounded-xl border border-dark/12 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+                  </div>
+                )}
                 {flags.length === 0 ? (
                   <div className="card flex flex-col items-center py-10 text-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -501,6 +549,8 @@ export default function SafetyPage() {
                     <p className="font-semibold text-dark/60 text-sm">No active safety flags</p>
                     <p className="text-dark/35 text-xs">All concerns have been resolved.</p>
                   </div>
+                ) : filteredFlags.length === 0 ? (
+                  <div className="card py-8 text-center text-dark/40 text-sm">No flags match your search.</div>
                 ) : (
                   <div>
                     {flagsPag.pageItems.map(flag => (
@@ -537,6 +587,31 @@ export default function SafetyPage() {
                     <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">{incidents.length}</span>
                   )}
                 </div>
+                {incidents.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
+                        <input type="text" value={incidentSearch} onChange={e => setIncidentSearch(e.target.value)}
+                          placeholder="Search incidents..."
+                          className="w-full pl-8 pr-4 py-2 rounded-xl border border-dark/12 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+                      </div>
+                      <select value={severityFilter} onChange={e => setSeverityFilter(e.target.value)}
+                        className="px-3 py-2 rounded-xl border border-dark/12 bg-white text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+                        <option value="">Severity</option>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                      </select>
+                      <select value={incidentTypeFilter} onChange={e => setIncidentTypeFilter(e.target.value)}
+                        className="px-3 py-2 rounded-xl border border-dark/12 bg-white text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+                        <option value="">Incident Type</option>
+                        {incidentTypeOptions.map(o => <option key={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
                 {incidents.length === 0 ? (
                   <div className="card flex flex-col items-center py-10 text-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -545,6 +620,8 @@ export default function SafetyPage() {
                     <p className="font-semibold text-dark/60 text-sm">No open incident reports</p>
                     <p className="text-dark/35 text-xs">All incidents have been resolved.</p>
                   </div>
+                ) : filteredIncidents.length === 0 ? (
+                  <div className="card py-8 text-center text-dark/40 text-sm">No incidents match your filters.</div>
                 ) : (
                   <div>
                     {incidentsPag.pageItems.map(incident => (

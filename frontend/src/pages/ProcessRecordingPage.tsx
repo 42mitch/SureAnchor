@@ -445,6 +445,9 @@ export default function ProcessRecordingPage() {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [sessionTypeFilter, setSessionTypeFilter] = useState('');
+  const [emotionFilter, setEmotionFilter] = useState('');
+  const [concernsFilter, setConcernsFilter] = useState('');
   const [selectedNote, setSelectedNote] = useState<SessionNote | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [editingNote, setEditingNote] = useState<SessionNote | null>(null);
@@ -468,13 +471,19 @@ export default function ProcessRecordingPage() {
     setDeleteLoading(false);
   }
 
-  const filtered = notes.filter(n => !search ||
-    n.residentCode.toLowerCase().includes(search.toLowerCase()) ||
-    n.socialWorker.toLowerCase().includes(search.toLowerCase()) ||
-    n.sessionType.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = notes.filter(n => {
+    const matchSearch = !search ||
+      n.residentCode.toLowerCase().includes(search.toLowerCase()) ||
+      n.socialWorker.toLowerCase().includes(search.toLowerCase()) ||
+      n.sessionType.toLowerCase().includes(search.toLowerCase());
+    const matchType = !sessionTypeFilter || n.sessionType === sessionTypeFilter;
+    const matchEmotion = !emotionFilter || n.emotionalState === emotionFilter;
+    const matchConcerns = !concernsFilter || (concernsFilter === 'Flagged' ? n.concernsFlagged : !n.concernsFlagged);
+    return matchSearch && matchType && matchEmotion && matchConcerns;
+  });
 
-  const notesPag = useListPagination(filtered, [search]);
+  const emotionOptions = [...new Set(notes.map(n => n.emotionalState).filter(Boolean))].sort();
+  const notesPag = useListPagination(filtered, [search, sessionTypeFilter, emotionFilter, concernsFilter]);
 
   return (
     <AdminLayout>
@@ -489,12 +498,31 @@ export default function ProcessRecordingPage() {
           </button>
         </div>
 
-        <div className="card py-3.5">
-          <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by resident ID, social worker, or session type..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl border border-dark/10 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/25 focus:border-teal placeholder-dark/30" />
+        <div className="card py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30" />
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search by resident, worker, or type..."
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30" />
+            </div>
+            <select value={sessionTypeFilter} onChange={e => setSessionTypeFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+              <option value="">Session Type</option>
+              <option value="Individual">Individual</option>
+              <option value="Group">Group</option>
+            </select>
+            <select value={emotionFilter} onChange={e => setEmotionFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+              <option value="">Emotional State</option>
+              {emotionOptions.map(o => <option key={o}>{o}</option>)}
+            </select>
+            <select value={concernsFilter} onChange={e => setConcernsFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+              <option value="">Concerns</option>
+              <option value="Flagged">Flagged Only</option>
+              <option value="None">No Concerns</option>
+            </select>
           </div>
         </div>
 

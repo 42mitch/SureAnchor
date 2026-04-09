@@ -135,7 +135,19 @@ export default function DonorPortalPage() {
     return acc;
   }, {});
 
-  const donPag    = useListPagination(donations, [donations.length]);
+  const [donTypeFilter, setDonTypeFilter] = useState('');
+  const [donCampaignFilter, setDonCampaignFilter] = useState('');
+
+  const filteredDonations = donations.filter(d => {
+    const matchType = !donTypeFilter || d.donationType === donTypeFilter;
+    const matchCampaign = !donCampaignFilter || (d.campaignName ?? '') === donCampaignFilter;
+    return matchType && matchCampaign;
+  });
+
+  const donTypeOptions = [...new Set(donations.map(d => d.donationType).filter(Boolean))].sort();
+  const donCampaignOptions = [...new Set(donations.map(d => d.campaignName).filter(Boolean))].sort() as string[];
+
+  const donPag    = useListPagination(filteredDonations, [donTypeFilter, donCampaignFilter, donations.length]);
   const impactPag = useListPagination(impact,    [impact.length]);
 
   return (
@@ -207,6 +219,20 @@ export default function DonorPortalPage() {
                   Give Again
                 </button>
               </div>
+              {donations.length > 0 && (
+                <div className="px-6 py-3 border-b border-dark/8 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select value={donTypeFilter} onChange={e => setDonTypeFilter(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+                    <option value="">All Types</option>
+                    {donTypeOptions.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                  <select value={donCampaignFilter} onChange={e => setDonCampaignFilter(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
+                    <option value="">All Campaigns</option>
+                    {donCampaignOptions.map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+              )}
               {donations.length === 0 ? (
                 <div className="px-6 py-16 text-center">
                   <HeartHandshake size={40} className="text-dark/20 mx-auto mb-3" />
@@ -220,6 +246,8 @@ export default function DonorPortalPage() {
                     Make Your First Donation
                   </button>
                 </div>
+              ) : filteredDonations.length === 0 ? (
+                <div className="px-6 py-10 text-center text-dark/40 text-sm">No donations match your filters.</div>
               ) : (
                 <>
                   <div className="overflow-x-auto">
