@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
-  AlertTriangle, CheckCircle, Clock, TrendingUp,
-  Megaphone, Heart, Camera, Users, Calendar, Star,
+  AlertTriangle, CheckCircle, Clock,
+  Megaphone, Heart, Users, Calendar, Star,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -9,7 +9,6 @@ import {
 } from 'recharts';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
-import { formatCurrency } from '../utils/currency';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -358,7 +357,7 @@ export default function SocialMediaPage() {
                 <XAxis dataKey="day" tick={{ fontSize: 11 }} tickFormatter={d => d.slice(0, 3)} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
-                  formatter={(val: number) => [`${val}%`, 'Engagement Rate']}
+                  formatter={(val: unknown) => [`${Number(val ?? 0)}%`, 'Engagement Rate']}
                   labelFormatter={l => `${l}`}
                   contentStyle={{ borderRadius: 12, fontSize: 12 }}
                 />
@@ -384,7 +383,7 @@ export default function SocialMediaPage() {
                 <XAxis dataKey="timeBucket" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
-                  formatter={(val: number) => [`${val}%`, 'Engagement Rate']}
+                  formatter={(val: unknown) => [`${Number(val ?? 0)}%`, 'Engagement Rate']}
                   labelFormatter={(l, p) => `${l} (${p[0]?.payload?.hourRange ?? ''})`}
                   contentStyle={{ borderRadius: 12, fontSize: 12 }}
                 />
@@ -526,7 +525,7 @@ export default function SocialMediaPage() {
                 <XAxis type="number" tick={{ fontSize: 11 }} />
                 <YAxis dataKey="label" type="category" tick={{ fontSize: 11 }} width={110} />
                 <Tooltip
-                  formatter={(val: number) => [`${val}%`, 'Engagement Rate']}
+                  formatter={(val: unknown) => [`${Number(val ?? 0)}%`, 'Engagement Rate']}
                   contentStyle={{ borderRadius: 12, fontSize: 12 }}
                 />
                 <Bar dataKey="avgEngagementRate" radius={[0, 4, 4, 0]}>
@@ -552,7 +551,7 @@ export default function SocialMediaPage() {
                 <XAxis type="number" tick={{ fontSize: 11 }} />
                 <YAxis dataKey="mediaType" type="category" tick={{ fontSize: 11 }} width={70} />
                 <Tooltip
-                  formatter={(val: number) => [`${val}%`, 'Engagement Rate']}
+                  formatter={(val: unknown) => [`${Number(val ?? 0)}%`, 'Engagement Rate']}
                   contentStyle={{ borderRadius: 12, fontSize: 12 }}
                 />
                 <Bar dataKey="avgEngagementRate" radius={[0, 4, 4, 0]}>
