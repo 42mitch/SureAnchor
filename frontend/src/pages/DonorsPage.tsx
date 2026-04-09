@@ -719,6 +719,8 @@ function DonorDetailModal({
   const [editingSupporter, setEditingSupporter] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SupporterDetail | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deletingDonation, setDeletingDonation] = useState<DonationRow | null>(null);
+  const [deleteDonationLoading, setDeleteDonationLoading] = useState(false);
   const [churnRisk, setChurnRisk] = useState<DonorChurnProfile | null>(null);
   const [churnLoading, setChurnLoading] = useState(true);
 
@@ -758,6 +760,18 @@ function DonorDetailModal({
     setDeleteLoading(false);
     onDonationsUpdated?.();
     onClose();
+  }
+
+  async function handleDeleteDonation() {
+    if (!deletingDonation) return;
+    setDeleteDonationLoading(true);
+    await apiFetch(`/api/donations/${deletingDonation.donationId}`, { method: 'DELETE' });
+    setDetail(prev =>
+      prev ? { ...prev, donations: prev.donations.filter(d => d.donationId !== deletingDonation.donationId) } : null
+    );
+    onDonationsUpdated?.();
+    setDeletingDonation(null);
+    setDeleteDonationLoading(false);
   }
 
   return (
@@ -988,22 +1002,33 @@ function DonorDetailModal({
                           )}
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        {d.amount != null ? (
-                          <CurrencyDisplayDetailed
-                            php={d.amount}
-                            className="items-end"
-                            usdClassName="font-display text-lg font-bold text-navy"
-                          />
-                        ) : d.estimatedValue != null ? (
-                          <CurrencyDisplay
-                            php={d.estimatedValue}
-                            className="items-end"
-                            usdClassName="text-sm font-semibold text-dark/60"
-                            phpClassName="text-xs text-dark/30 font-normal"
-                          />
-                        ) : (
-                          <span className="text-sm text-dark/30 italic">In-kind / Time</span>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="text-right">
+                          {d.amount != null ? (
+                            <CurrencyDisplayDetailed
+                              php={d.amount}
+                              className="items-end"
+                              usdClassName="font-display text-lg font-bold text-navy"
+                            />
+                          ) : d.estimatedValue != null ? (
+                            <CurrencyDisplay
+                              php={d.estimatedValue}
+                              className="items-end"
+                              usdClassName="text-sm font-semibold text-dark/60"
+                              phpClassName="text-xs text-dark/30 font-normal"
+                            />
+                          ) : (
+                            <span className="text-sm text-dark/30 italic">In-kind / Time</span>
+                          )}
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setDeletingDonation(d); }}
+                            className="p-1.5 rounded-lg text-dark/25 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                            title="Delete donation"
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1082,6 +1107,16 @@ function DonorDetailModal({
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
           loading={deleteLoading}
+        />
+      )}
+
+      {deletingDonation && (
+        <ConfirmDeleteModal
+          title="Delete Donation"
+          description={`Are you sure you want to permanently delete this ${deletingDonation.donationType} donation from ${deletingDonation.donationDate}${deletingDonation.campaignName ? ` (${deletingDonation.campaignName})` : ''}? This cannot be undone.`}
+          onConfirm={handleDeleteDonation}
+          onCancel={() => setDeletingDonation(null)}
+          loading={deleteDonationLoading}
         />
       )}
     </div>
