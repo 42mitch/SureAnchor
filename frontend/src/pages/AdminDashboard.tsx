@@ -340,6 +340,7 @@ export default function AdminDashboard() {
       text: `New resident admitted to ${r.safehouse}`,
       sub: `${r.caseNo} · ${r.category} · Risk: ${r.risk}`,
       date: r.dateAdmitted!,
+      linkTo: '/admin/caseload' as const,
     })),
     ...recentDonations.map(d => ({
       id: `don-${d.donationId}`,
@@ -347,6 +348,7 @@ export default function AdminDashboard() {
       text: `${d.donationType} donation received`,
       sub: `${d.donorName} · via ${d.channelSource || 'Direct'} · ${d.amount ? formatUsdK(phpToUsd(Number(d.amount))) : d.impactUnit}`,
       date: d.donationDate,
+      linkTo: '/admin/donors' as const,
     })),
   ]
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -1034,18 +1036,22 @@ export default function AdminDashboard() {
               {activityItems.map(item => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.id} className="flex gap-4 items-start group">
+                  <Link
+                    key={item.id}
+                    to={item.linkTo}
+                    className="flex gap-4 items-start group rounded-xl -mx-2 px-2 py-1 -my-1 hover:bg-navy/5 transition-colors cursor-pointer text-left"
+                  >
                     <div className="w-9 h-9 rounded-xl bg-navy/6 flex items-center justify-center flex-shrink-0 group-hover:bg-teal/10 transition-colors">
                       <Icon size={16} className="text-navy/50 group-hover:text-teal transition-colors" strokeWidth={1.8} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-dark">{item.text}</p>
+                      <p className="text-sm font-medium text-dark group-hover:text-teal transition-colors">{item.text}</p>
                       <p className="text-xs text-dark/50 mt-0.5 truncate">{item.sub}</p>
                     </div>
                     <span className="text-xs text-dark/30 flex-shrink-0 pt-0.5">
                       {new Date(item.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
                     </span>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
