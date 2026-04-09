@@ -55,6 +55,16 @@ interface ResidentDetail {
   hasSpecialNeeds: boolean;
   specialNeedsDiagnosis: string | null;
   recentNote: string | null;
+  subCatOrphaned: boolean;
+  subCatTrafficked: boolean;
+  subCatChildLabor: boolean;
+  subCatPhysicalAbuse: boolean;
+  subCatSexualAbuse: boolean;
+  subCatOsaec: boolean;
+  subCatCicl: boolean;
+  subCatAtRisk: boolean;
+  subCatStreetChild: boolean;
+  subCatChildWithHiv: boolean;
 }
 
 interface ProcessRecording {
@@ -981,6 +991,44 @@ export default function ResidentProfilePage() {
                       : 'No',
                   },
                   { label: 'Case Category', value: resident.category },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide mb-1">{label}</p>
+                    <p className="text-sm font-semibold text-dark">{value}</p>
+                  </div>
+                ))}
+
+                {/* Subcategories — shown right after Case Category */}
+                {(() => {
+                  const SUB_CATS: { key: keyof typeof resident; label: string }[] = [
+                    { key: 'subCatOrphaned',     label: 'Orphaned' },
+                    { key: 'subCatTrafficked',   label: 'Trafficked' },
+                    { key: 'subCatChildLabor',   label: 'Child Labor' },
+                    { key: 'subCatPhysicalAbuse',label: 'Physical Abuse' },
+                    { key: 'subCatSexualAbuse',  label: 'Sexual Abuse' },
+                    { key: 'subCatOsaec',        label: 'OSAEC' },
+                    { key: 'subCatCicl',         label: 'CICL' },
+                    { key: 'subCatAtRisk',       label: 'At Risk' },
+                    { key: 'subCatStreetChild',  label: 'Street Child' },
+                    { key: 'subCatChildWithHiv', label: 'Child w/ HIV' },
+                  ];
+                  const active = SUB_CATS.filter(s => resident[s.key]);
+                  if (active.length === 0) return null;
+                  return (
+                    <div className="col-span-2">
+                      <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide mb-1.5">Sub-Categories</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {active.map(s => (
+                          <span key={s.key} className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-navy/8 text-navy">
+                            {s.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {[
                   { label: 'Date Admitted', value: resident.dateAdmitted ?? '—' },
                   { label: 'Safe House', value: resident.safehouse },
                   { label: 'Current Status', value: resident.status },

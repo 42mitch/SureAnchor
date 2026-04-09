@@ -96,7 +96,17 @@ public class ResidentsController : ControllerBase
             r.PwdType,
             r.HasSpecialNeeds,
             r.SpecialNeedsDiagnosis,
-            r.ProcessRecordings.FirstOrDefault()?.SessionNarrative
+            r.ProcessRecordings.FirstOrDefault()?.SessionNarrative,
+            r.SubCatOrphaned,
+            r.SubCatTrafficked,
+            r.SubCatChildLabor,
+            r.SubCatPhysicalAbuse,
+            r.SubCatSexualAbuse,
+            r.SubCatOsaec,
+            r.SubCatCicl,
+            r.SubCatAtRisk,
+            r.SubCatStreetChild,
+            r.SubCatChildWithHiv
         );
         return Ok(dto);
     }
@@ -236,7 +246,18 @@ public record ResidentDetailDto(
     string? PwdType,
     bool HasSpecialNeeds,
     string? SpecialNeedsDiagnosis,
-    string? RecentNote
+    string? RecentNote,
+    // Subcategory flags
+    bool SubCatOrphaned,
+    bool SubCatTrafficked,
+    bool SubCatChildLabor,
+    bool SubCatPhysicalAbuse,
+    bool SubCatSexualAbuse,
+    bool SubCatOsaec,
+    bool SubCatCicl,
+    bool SubCatAtRisk,
+    bool SubCatStreetChild,
+    bool SubCatChildWithHiv
 );
 
 // Note: [property: ...] data annotation attributes on record primary constructor
