@@ -509,6 +509,377 @@ function InterventionPlanModal({
   );
 }
 
+// ─── Add Session Note modal ───────────────────────────────────────────────────
+
+const SESSION_TYPES   = ['Individual', 'Group', 'Family', 'Crisis'];
+const EMOTION_STATES  = ['Hopeful', 'Calm', 'Anxious', 'Distressed', 'Reflective', 'Withdrawn'];
+
+function AddSessionModal({
+  residentId, workerName, onClose, onSaved,
+}: {
+  residentId: number;
+  workerName: string;
+  onClose: () => void;
+  onSaved: (r: ProcessRecording) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+  const [form, setForm]     = useState({
+    sessionDate:           new Date().toISOString().slice(0, 10),
+    sessionType:           'Individual',
+    emotionalStateObserved:'',
+    sessionNarrative:      '',
+    interventionsApplied:  '',
+    followUpActions:       '',
+    progressNoted:         false,
+    concernsFlagged:       false,
+  });
+
+  function set(key: string, val: string | boolean) {
+    setForm(prev => ({ ...prev, [key]: val }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    const body = {
+      residentId,
+      sessionDate:           form.sessionDate,
+      socialWorker:          workerName,
+      sessionType:           form.sessionType,
+      emotionalStateObserved: form.emotionalStateObserved || null,
+      sessionNarrative:      form.sessionNarrative       || null,
+      interventionsApplied:  form.interventionsApplied   || null,
+      followUpActions:       form.followUpActions        || null,
+      progressNoted:         form.progressNoted,
+      concernsFlagged:       form.concernsFlagged,
+    };
+    const res = await apiFetch('/api/process-recordings', { method: 'POST', body: JSON.stringify(body) });
+    if (res.ok) {
+      const { recordingId } = await res.json();
+      const saved: ProcessRecording = {
+        recordingId,
+        residentId,
+        residentCode: '',
+        sessionDate:  form.sessionDate,
+        socialWorker: workerName,
+        sessionType:  form.sessionType,
+        emotionalState: form.emotionalStateObserved,
+        narrative:    form.sessionNarrative,
+        interventions: form.interventionsApplied,
+        followUp:     form.followUpActions,
+        progressNoted:  form.progressNoted,
+        concernsFlagged: form.concernsFlagged,
+      };
+      onSaved(saved);
+      onClose();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? d.message ?? 'Failed to save.');
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto animate-fade-in">
+        <div className="sticky top-0 bg-white rounded-t-2xl px-5 py-4 border-b border-dark/8 flex items-center justify-between z-10">
+          <h3 className="font-display text-lg font-bold text-navy">Add Session Note</h3>
+          <button onClick={onClose} className="text-dark/35 hover:text-dark p-1.5 rounded-lg hover:bg-dark/6 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && (
+            <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
+          )}
+
+          {/* Read-only social worker */}
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Social Worker</label>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dark/8 bg-dark/4 text-sm text-dark/60">
+              <div className="w-6 h-6 rounded-full bg-teal flex items-center justify-center text-white text-xs font-bold">
+                {workerName.split(' ').map(n => n[0]).join('')}
+              </div>
+              {workerName}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Session Date *</label>
+              <input type="date" required value={form.sessionDate} onChange={e => set('sessionDate', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Session Type *</label>
+              <select value={form.sessionType} onChange={e => set('sessionType', e.target.value)} required
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {SESSION_TYPES.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Emotional State Observed</label>
+            <select value={form.emotionalStateObserved} onChange={e => set('emotionalStateObserved', e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+              <option value="">— Select —</option>
+              {EMOTION_STATES.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Session Narrative</label>
+            <textarea value={form.sessionNarrative} onChange={e => set('sessionNarrative', e.target.value)} rows={4}
+              placeholder="Describe what occurred during this session…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Interventions Applied</label>
+            <textarea value={form.interventionsApplied} onChange={e => set('interventionsApplied', e.target.value)} rows={2}
+              placeholder="e.g. CBT techniques, art therapy, role-play…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Follow-up Actions</label>
+            <textarea value={form.followUpActions} onChange={e => set('followUpActions', e.target.value)} rows={2}
+              placeholder="Next steps or actions to take…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+
+          <div className="flex flex-wrap gap-5 pt-1">
+            {[
+              { key: 'progressNoted',  label: 'Progress Noted'  },
+              { key: 'concernsFlagged', label: 'Concerns Flagged' },
+            ].map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={(form as any)[key]} onChange={e => set(key, e.target.checked)}
+                  className="w-4 h-4 rounded border-dark/20 accent-teal" />
+                <span className="text-sm font-medium text-dark/70">{label}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary text-sm disabled:opacity-60">
+              {saving ? 'Saving…' : 'Add Session Note'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Home Visitation modal ────────────────────────────────────────────────
+
+const VISIT_TYPES         = ['Initial Assessment', 'Follow-Up', 'Crisis', 'Courtesy', 'Reintegration', 'Monitoring'];
+const COOPERATION_LEVELS  = ['Highly Cooperative', 'Cooperative', 'Neutral', 'Uncooperative'];
+const VISIT_OUTCOMES      = ['Favorable', 'Needs Improvement', 'Unfavorable', 'Inconclusive'];
+
+function AddVisitModal({
+  residentId, workerName, onClose, onSaved,
+}: {
+  residentId: number;
+  workerName: string;
+  onClose: () => void;
+  onSaved: (v: HomeVisitation) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+  const [form, setForm]     = useState({
+    visitDate:             new Date().toISOString().slice(0, 10),
+    visitType:             'Follow-Up',
+    locationVisited:       '',
+    familyMembersPresent:  '',
+    familyCooperationLevel:'Cooperative',
+    visitOutcome:          'Favorable',
+    safetyConcernsNoted:   false,
+    followUpNeeded:        false,
+    purpose:               '',
+    observations:          '',
+    followUpNotes:         '',
+  });
+
+  function set(key: string, val: string | boolean) {
+    setForm(prev => ({ ...prev, [key]: val }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    const body = {
+      residentId,
+      visitDate:             form.visitDate,
+      socialWorker:          workerName,
+      visitType:             form.visitType,
+      locationVisited:       form.locationVisited       || null,
+      familyMembersPresent:  form.familyMembersPresent  || null,
+      familyCooperationLevel: form.familyCooperationLevel || null,
+      visitOutcome:          form.visitOutcome           || null,
+      safetyConcernsNoted:   form.safetyConcernsNoted,
+      followUpNeeded:        form.followUpNeeded,
+      purpose:               form.purpose               || null,
+      observations:          form.observations          || null,
+      followUpNotes:         form.followUpNotes         || null,
+    };
+    const res = await apiFetch('/api/home-visitations', { method: 'POST', body: JSON.stringify(body) });
+    if (res.ok) {
+      const { visitationId } = await res.json();
+      const saved: HomeVisitation = {
+        visitationId,
+        residentId,
+        residentCode:     '',
+        visitDate:        form.visitDate,
+        socialWorker:     workerName,
+        visitType:        form.visitType,
+        familyCooperation: form.familyCooperationLevel,
+        safetyConcern:    form.safetyConcernsNoted,
+        followUpNeeded:   form.followUpNeeded,
+        outcome:          form.visitOutcome,
+      };
+      onSaved(saved);
+      onClose();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error ?? d.message ?? 'Failed to save.');
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto animate-fade-in">
+        <div className="sticky top-0 bg-white rounded-t-2xl px-5 py-4 border-b border-dark/8 flex items-center justify-between z-10">
+          <h3 className="font-display text-lg font-bold text-navy">Log Home Visitation</h3>
+          <button onClick={onClose} className="text-dark/35 hover:text-dark p-1.5 rounded-lg hover:bg-dark/6 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && (
+            <div className="px-3 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
+          )}
+
+          {/* Read-only social worker */}
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Social Worker</label>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dark/8 bg-dark/4 text-sm text-dark/60">
+              <div className="w-6 h-6 rounded-full bg-teal flex items-center justify-center text-white text-xs font-bold">
+                {workerName.split(' ').map(n => n[0]).join('')}
+              </div>
+              {workerName}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Visit Date *</label>
+              <input type="date" required value={form.visitDate} onChange={e => set('visitDate', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Visit Type *</label>
+              <select value={form.visitType} onChange={e => set('visitType', e.target.value)} required
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {VISIT_TYPES.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Location Visited</label>
+            <input type="text" value={form.locationVisited} onChange={e => set('locationVisited', e.target.value)}
+              placeholder="e.g. Family home, Barangay hall…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Family Members Present</label>
+            <input type="text" value={form.familyMembersPresent} onChange={e => set('familyMembersPresent', e.target.value)}
+              placeholder="Names of family members present…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Family Cooperation</label>
+              <select value={form.familyCooperationLevel} onChange={e => set('familyCooperationLevel', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {COOPERATION_LEVELS.map(l => <option key={l}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Visit Outcome</label>
+              <select value={form.visitOutcome} onChange={e => set('visitOutcome', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                {VISIT_OUTCOMES.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Purpose of Visit</label>
+            <textarea value={form.purpose} onChange={e => set('purpose', e.target.value)} rows={2}
+              placeholder="Why was this visit conducted?"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Observations</label>
+            <textarea value={form.observations} onChange={e => set('observations', e.target.value)} rows={3}
+              placeholder="Describe conditions observed during the visit…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-1.5">Follow-up Notes</label>
+            <textarea value={form.followUpNotes} onChange={e => set('followUpNotes', e.target.value)} rows={2}
+              placeholder="Actions to follow up on after this visit…"
+              className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none placeholder-dark/25" />
+          </div>
+
+          <div className="flex flex-wrap gap-5 pt-1">
+            {[
+              { key: 'safetyConcernsNoted', label: 'Safety Concerns Noted' },
+              { key: 'followUpNeeded',       label: 'Follow-up Needed'      },
+            ].map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={(form as any)[key]} onChange={e => set(key, e.target.checked)}
+                  className="w-4 h-4 rounded border-dark/20 accent-teal" />
+                <span className="text-sm font-medium text-dark/70">{label}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary text-sm disabled:opacity-60">
+              {saving ? 'Saving…' : 'Log Visitation'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function parseRecordDate(d: string): Date | null {
   if (!d) return null;
   const parsed = new Date(d);
@@ -698,6 +1069,9 @@ export default function ResidentProfilePage() {
   const [safehouses, setSafehouses] = useState<SafehouseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [visitModalOpen, setVisitModalOpen]   = useState(false);
 
   const [showEditResident, setShowEditResident] = useState(false);
   const [sessionToEdit, setSessionToEdit] = useState<SessionNoteRow | null>(null);
@@ -1120,6 +1494,22 @@ export default function ResidentProfilePage() {
         {/* ── SESSIONS TAB ──────────────────────────────────────────────────── */}
         {activeTab === 'sessions' && (
           <div className="space-y-4">
+            {/* Header row */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-xl font-semibold text-navy">Counseling Sessions</h2>
+                <p className="text-dark/45 text-sm mt-0.5">{sessions.length} session note{sessions.length !== 1 ? 's' : ''} recorded</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setSessionModalOpen(true)}
+                  className="btn-primary flex items-center gap-2 text-sm"
+                >
+                  <Plus size={15} /> Add Session Note
+                </button>
+              )}
+            </div>
+
             {sessions.length === 0 ? (
               <div className="card text-center py-16">
                 <FileText size={40} className="text-dark/20 mx-auto mb-3" />
@@ -1213,6 +1603,22 @@ export default function ResidentProfilePage() {
         {/* ── VISITATIONS TAB ───────────────────────────────────────────────── */}
         {activeTab === 'visitations' && (
           <div className="space-y-4">
+            {/* Header row */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-xl font-semibold text-navy">Home Visitations</h2>
+                <p className="text-dark/45 text-sm mt-0.5">{visitations.length} visit{visitations.length !== 1 ? 's' : ''} recorded</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setVisitModalOpen(true)}
+                  className="btn-primary flex items-center gap-2 text-sm"
+                >
+                  <Plus size={15} /> Log Visitation
+                </button>
+              )}
+            </div>
+
             {visitations.length === 0 ? (
               <div className="card text-center py-16">
                 <Home size={40} className="text-dark/20 mx-auto mb-3" />
@@ -1907,6 +2313,27 @@ export default function ResidentProfilePage() {
           onConfirm={handleDeleteIntervention}
           onCancel={() => setInterventionDeleteTarget(null)}
           loading={interventionDeleteLoading}
+        />
+      )}
+      {sessionModalOpen && resident && (
+        <AddSessionModal
+          residentId={resident.residentId}
+          workerName={resident.worker}
+          onClose={() => setSessionModalOpen(false)}
+          onSaved={saved => {
+            setSessions(prev => [saved, ...prev]);
+            reloadResident();
+          }}
+        />
+      )}
+      {visitModalOpen && resident && (
+        <AddVisitModal
+          residentId={resident.residentId}
+          workerName={resident.worker}
+          onClose={() => setVisitModalOpen(false)}
+          onSaved={saved => {
+            setVisitations(prev => [saved, ...prev]);
+          }}
         />
       )}
     </AdminLayout>
