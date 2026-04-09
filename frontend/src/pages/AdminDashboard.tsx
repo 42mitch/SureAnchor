@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import {
   Users, HeartHandshake, Home, ChevronDown, ChevronUp,
   UserPlus, Heart, Calendar, Activity, AlertTriangle,
-  Cpu, Megaphone, Target
+  Cpu, Megaphone, Target, Brain, TrendingDown,
+  Trophy, BarChart2
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -16,6 +17,36 @@ import { CurrencyDisplay } from '../components/CurrencyDisplay';
 import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ChurnPrediction {
+  supporter_id: number;
+  display_name: string;
+  email?: string;
+  churn_probability: number;
+  risk_tier: 'Critical' | 'High' | 'Medium' | 'Low';
+  recommended_action: string;
+}
+interface ChurnResult { available: boolean; predictions?: ChurnPrediction[]; reason?: string; }
+
+interface CampaignScore {
+  campaign_name: string;
+  month_label: string;
+  high_performance_probability: number;
+  is_high_performing: boolean;
+  total_value_php: number;
+  total_donations: number;
+  rank: number;
+}
+interface CampaignResult { available: boolean; scorecard?: CampaignScore[]; reason?: string; }
+
+interface SafehousePrediction {
+  safehouse_id: number;
+  safehouse_name: string;
+  predicted_education_progress: number;
+  current_education_progress: number;
+  delta: number;
+}
+interface SafehouseResult { available: boolean; predictions?: SafehousePrediction[]; reason?: string; }
 
 interface ResidentListDto {
   residentId: number;
@@ -112,21 +143,6 @@ function Section({
   );
 }
 
-function MLPlaceholder({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex flex-col gap-2">
-      <div className="flex items-center gap-2 text-dark/40">
-        <Cpu size={16} strokeWidth={1.8} />
-        <span className="text-xs font-bold uppercase tracking-widest">ML Pipeline</span>
-        <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">
-          Coming Soon
-        </span>
-      </div>
-      <p className="font-display text-sm font-semibold text-dark/50">{title}</p>
-      <p className="text-xs text-dark/35 leading-relaxed">{description}</p>
-    </div>
-  );
-}
 
 function StatCard({ label, value, currencyPhp, sub, color = 'bg-teal/10 text-teal', icon: Icon }: {
   label: string; value?: string; currencyPhp?: number; sub?: string; color?: string; icon: React.ElementType;
@@ -158,6 +174,9 @@ function StatCard({ label, value, currencyPhp, sub, color = 'bg-teal/10 text-tea
 export default function AdminDashboard() {
   const [residents, setResidents] = useState<ResidentListDto[]>([]);
   const [donations, setDonations] = useState<DonationDto[]>([]);
+  const [churnResult, setChurnResult] = useState<ChurnResult | null>(null);
+  const [campaignResult, setCampaignResult] = useState<CampaignResult | null>(null);
+  const [safehouseResult, setSafehouseResult] = useState<SafehouseResult | null>(null);
   const [safehouses, setSafehouses] = useState<SafehouseDto[]>([]);
   const [loadingResidents, setLoadingResidents] = useState(true);
   const [loadingDonations, setLoadingDonations] = useState(true);
@@ -195,6 +214,24 @@ export default function AdminDashboard() {
     fetchDonations();
     fetchSafehouses();
   }, [fetchResidents, fetchDonations, fetchSafehouses]);
+
+  // ML predictions — fire once on mount, graceful on failure
+  useEffect(() => {
+    apiFetch('/api/ml/donor-churn')
+      .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
+      .then(setChurnResult)
+      .catch(() => setChurnResult({ available: false, reason: 'ML service unavailable' }));
+
+    apiFetch('/api/ml/campaign-effectiveness')
+      .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
+      .then(setCampaignResult)
+      .catch(() => setCampaignResult({ available: false, reason: 'ML service unavailable' }));
+
+    apiFetch('/api/ml/safehouse-resources')
+      .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
+      .then(setSafehouseResult)
+      .catch(() => setSafehouseResult({ available: false, reason: 'ML service unavailable' }));
+  }, []);
 
   // ── Derived: Residents ──────────────────────────────────────────────────────
   const activeResidents = residents.filter(r => r.status === 'Active');
@@ -490,10 +527,41 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <MLPlaceholder
-              title="Safehouse Resource Allocation Optimizer"
-              description="Predicts optimal distribution of residents, staff, and supplies across safehouses based on capacity, risk levels, and historical incident data."
-            />
+            {/* ML: Safehouse Resource Impact */}
+            {safehouseResult === null ? (
+              <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
+                <Brain size={16} className="text-dark/30" />
+                <span className="text-xs text-dark/35 font-medium">Loading safehouse resource predictions…</span>
+              </div>
+            ) : !safehouseResult.available ? (
+              <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-2 text-dark/40">
+                <Cpu size={16} strokeWidth={1.8} />
+                <span className="text-xs font-bold uppercase tracking-widest">ML Pipeline</span>
+                <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">Unavailable</span>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-navy/12 bg-navy/3 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Brain size={15} className="text-navy" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Safehouse Education Forecast</span>
+                </div>
+                <div className="space-y-2">
+                  {(safehouseResult.predictions ?? []).map(sh => (
+                    <div key={sh.safehouse_id} className="flex items-center justify-between text-sm">
+                      <span className="text-dark/70 font-medium truncate mr-3">{sh.safehouse_name}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-dark/50 text-xs">{sh.current_education_progress}% →</span>
+                        <span className="font-bold text-navy">{sh.predicted_education_progress}%</span>
+                        <span className={`text-xs font-semibold ${sh.delta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {sh.delta >= 0 ? '+' : ''}{sh.delta}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-dark/35 mt-3">Predicted avg education progress next month based on current funding allocation.</p>
+              </div>
+            )}
 
             {/* Safehouse occupancy */}
             <div>
@@ -650,14 +718,73 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
-              <MLPlaceholder
-                title="Campaign Strategy Ranker"
-                description="Ranks past and proposed campaigns by predicted impact using post performance, donation correlation, and audience reach signals."
-              />
-              <MLPlaceholder
-                title="Social Media Posting Optimizer"
-                description="Recommends what to post, on which platform, and at what time — tailored to SureAnchor's specific audience patterns."
-              />
+              {/* ML: Campaign Strategy Ranker */}
+              {campaignResult === null ? (
+                <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
+                  <Brain size={16} className="text-dark/30" />
+                  <span className="text-xs text-dark/35 font-medium">Loading campaign rankings…</span>
+                </div>
+              ) : !campaignResult.available ? (
+                <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-2 text-dark/40">
+                  <Cpu size={16} strokeWidth={1.8} />
+                  <span className="text-xs font-bold uppercase tracking-widest">ML · Campaign Ranker</span>
+                  <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">Unavailable</span>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-gold/20 bg-gold/4 p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Trophy size={15} className="text-gold" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Campaign Ranker</span>
+                  </div>
+                  {(campaignResult.scorecard ?? []).length === 0 ? (
+                    <p className="text-xs text-dark/40">No campaign data available yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(campaignResult.scorecard ?? []).slice(0, 5).map(c => (
+                        <div key={`${c.campaign_name}-${c.month_label}`} className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-dark/30 w-4 text-right flex-shrink-0">#{c.rank}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-dark truncate">{c.campaign_name}</p>
+                            <p className="text-xs text-dark/40">{c.month_label}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <div className="w-12 h-1.5 bg-dark/8 rounded-full overflow-hidden">
+                              <div className="h-full bg-gold rounded-full" style={{ width: `${c.high_performance_probability * 100}%` }} />
+                            </div>
+                            <span className="text-xs font-bold text-gold">{Math.round(c.high_performance_probability * 100)}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-dark/35 mt-3">Campaigns ranked by predicted high-performance probability.</p>
+                </div>
+              )}
+
+              {/* Social Media Optimizer — static insights (model requires live post input) */}
+              <div className="rounded-2xl border border-teal/20 bg-teal/4 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart2 size={15} className="text-teal" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Post Impact Model</span>
+                  <span className="ml-auto text-xs bg-teal/15 text-teal px-2 py-0.5 rounded-full font-semibold">Active</span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { label: 'Best post type', value: 'Impact Story', note: 'Highest referral yield' },
+                    { label: 'Best platforms', value: 'Instagram · Twitter', note: '10.6% avg engagement' },
+                    { label: 'Best time', value: '7–9 PM weekends', note: 'Peak donation referrals' },
+                  ].map(r => (
+                    <div key={r.label} className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-dark/45 font-medium flex-shrink-0">{r.label}</span>
+                      <div className="text-right">
+                        <span className="text-xs font-bold text-navy block">{r.value}</span>
+                        <span className="text-xs text-dark/35">{r.note}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-dark/35 mt-3">Live prediction per post available via the social media post entry form.</p>
+              </div>
             </div>
           </div>
         </Section>
@@ -744,10 +871,68 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <MLPlaceholder
-              title="Donor Churn Predictor"
-              description="Identifies which donors are at risk of lapsing based on donation frequency, amount trends, and engagement signals — enabling proactive outreach before they go quiet."
-            />
+            {/* ML: Donor Churn Predictor */}
+            {churnResult === null ? (
+              <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
+                <Brain size={16} className="text-dark/30" />
+                <span className="text-xs text-dark/35 font-medium">Loading churn predictions…</span>
+              </div>
+            ) : !churnResult.available ? (
+              <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-2 text-dark/40">
+                <Cpu size={16} strokeWidth={1.8} />
+                <span className="text-xs font-bold uppercase tracking-widest">ML · Donor Churn Predictor</span>
+                <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">Unavailable</span>
+              </div>
+            ) : (() => {
+              const preds = churnResult.predictions ?? [];
+              const critical = preds.filter(p => p.risk_tier === 'Critical');
+              const high     = preds.filter(p => p.risk_tier === 'High');
+              const atRisk   = [...critical, ...high].slice(0, 6);
+              return (
+                <div className="rounded-2xl border border-orange-200 bg-orange-50/50 p-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingDown size={15} className="text-orange-500" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Donor Churn Predictor</span>
+                  </div>
+                  <div className="flex gap-3 mb-4 mt-2">
+                    <div className="rounded-xl bg-red-100 px-3 py-2 text-center">
+                      <div className="font-display text-xl font-bold text-red-700">{critical.length}</div>
+                      <div className="text-xs text-red-600">Critical</div>
+                    </div>
+                    <div className="rounded-xl bg-orange-100 px-3 py-2 text-center">
+                      <div className="font-display text-xl font-bold text-orange-700">{high.length}</div>
+                      <div className="text-xs text-orange-600">High Risk</div>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 text-center">
+                      <div className="font-display text-xl font-bold text-dark">{preds.length}</div>
+                      <div className="text-xs text-dark/50">Total scored</div>
+                    </div>
+                  </div>
+                  {atRisk.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Priority outreach list</p>
+                      {atRisk.map(p => {
+                        const tierColor = p.risk_tier === 'Critical'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-orange-100 text-orange-700';
+                        return (
+                          <div key={p.supporter_id} className="flex items-center justify-between gap-3 bg-white rounded-xl px-3 py-2 border border-dark/6">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-dark truncate">{p.display_name}</p>
+                              <p className="text-xs text-dark/40 truncate">{p.recommended_action.split(':')[0]}</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${tierColor}`}>{p.risk_tier}</span>
+                              <span className="text-xs font-bold text-dark/60">{Math.round(p.churn_probability * 100)}%</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </Section>
 

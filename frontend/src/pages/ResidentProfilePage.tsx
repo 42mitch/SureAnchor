@@ -4,7 +4,8 @@ import {
   ArrowLeft, User, FileText, Home, Shield, Calendar,
   AlertTriangle, CheckCircle, Clock, ChevronRight, Activity,
   BookOpen, Heart, MapPin, Hash, Pencil, Trash2, GraduationCap,
-  Stethoscope, Plus, X, ClipboardList, Flag, RefreshCw as Refresh
+  Stethoscope, Plus, X, ClipboardList, Flag, RefreshCw as Refresh,
+  TrendingDown, TrendingUp, Minus, Brain
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -123,6 +124,27 @@ interface HealthRecord {
   dentalCheckupDone: boolean;
   psychologicalCheckupDone: boolean;
   notes: string | null;
+}
+
+// ─── ML prediction types ──────────────────────────────────────────────────────
+
+interface HealthTrajectoryResult {
+  available: boolean;
+  reason?: string;
+  trajectory?: 'Declining' | 'Stable' | 'Improving';
+  declining_probability?: number;
+  probabilities?: Record<string, number>;
+  alert_level?: 'red' | 'yellow' | 'green';
+  recommended_action?: string;
+}
+
+interface ReintegrationResult {
+  available: boolean;
+  reason?: string;
+  predicted_risk_level?: string;
+  risk_action?: string;
+  reintegration_ready?: boolean;
+  readiness_probability?: number;
 }
 
 function toHealthScoreOutOfFive(value: number | null | undefined): number | null {
@@ -1064,6 +1086,9 @@ export default function ResidentProfilePage() {
   const [healthDeleteTarget, setHealthDeleteTarget] = useState<HealthRecord | null>(null);
   const [healthDeleteLoading, setHealthDeleteLoading] = useState(false);
 
+  const [healthTrajectory, setHealthTrajectory] = useState<HealthTrajectoryResult | null>(null);
+  const [reintegration, setReintegration] = useState<ReintegrationResult | null>(null);
+
   const [interventionPlans, setInterventionPlans] = useState<InterventionPlan[]>([]);
   const [interventionModalOpen, setInterventionModalOpen] = useState(false);
   const [interventionToEdit, setInterventionToEdit] = useState<InterventionPlan | null>(null);
@@ -1143,6 +1168,17 @@ export default function ResidentProfilePage() {
       setEducationRecords(edu);
       setHealthRecords(health);
       setInterventionPlans(plans);
+
+      // Fire ML predictions after core data is loaded (non-blocking, graceful on failure)
+      apiFetch(`/api/ml/residents/${id}/health-trajectory`)
+        .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
+        .then(setHealthTrajectory)
+        .catch(() => setHealthTrajectory({ available: false, reason: 'ML service unavailable' }));
+
+      apiFetch(`/api/ml/residents/${id}/reintegration`)
+        .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
+        .then(setReintegration)
+        .catch(() => setReintegration({ available: false, reason: 'ML service unavailable' }));
     }).finally(() => setLoading(false));
   }, [id]);
 
@@ -1878,6 +1914,67 @@ export default function ResidentProfilePage() {
               )}
             </div>
 
+            {/* ── ML: Health Trajectory ──────────────────────────────────────── */}
+            {healthTrajectory === null ? (
+              <div className="rounded-2xl border border-dark/8 bg-dark/3 p-4 flex items-center gap-3 animate-pulse">
+                <Brain size={16} className="text-dark/30 flex-shrink-0" />
+                <span className="text-xs text-dark/35 font-medium">Loading health trajectory prediction…</span>
+              </div>
+            ) : !healthTrajectory.available ? (
+              <div className="rounded-2xl border border-dark/8 bg-dark/3 p-4 flex items-center gap-3">
+                <Brain size={16} className="text-dark/25 flex-shrink-0" />
+                <span className="text-xs text-dark/35 font-medium">Health trajectory prediction unavailable</span>
+              </div>
+            ) : (() => {
+              const traj = healthTrajectory.trajectory!;
+              const alert = healthTrajectory.alert_level!;
+              const declining = healthTrajectory.declining_probability ?? 0;
+
+              const config = {
+                red:    { bg: 'bg-red-50 border-red-200',    icon: TrendingDown, iconColor: 'text-red-500',    badge: 'bg-red-100 text-red-700',    label: 'Health Decline Risk' },
+                yellow: { bg: 'bg-yellow-50 border-yellow-200', icon: Minus,       iconColor: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Stable — Watch Closely' },
+                green:  { bg: 'bg-green-50 border-green-200',  icon: TrendingUp,  iconColor: 'text-green-600',  badge: 'bg-green-100 text-green-700',   label: 'Improving' },
+              }[alert];
+              const Icon = config.icon;
+
+              return (
+                <div className={`rounded-2xl border p-4 ${config.bg}`}>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <Icon size={20} className={config.iconColor} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="text-xs font-bold uppercase tracking-widest text-dark/40 flex items-center gap-1">
+                          <Brain size={11} /> ML · Health Trajectory
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${config.badge}`}>{traj}</span>
+                        {alert === 'red' && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1">
+                            <AlertTriangle size={10} /> Alert
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-dark mb-1">{config.label}</p>
+                      {healthTrajectory.recommended_action && (
+                        <p className="text-xs text-dark/60 leading-relaxed">{healthTrajectory.recommended_action}</p>
+                      )}
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-xs text-dark/40">Decline probability:</span>
+                        <div className="flex-1 max-w-32 h-1.5 bg-white/60 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${alert === 'red' ? 'bg-red-400' : alert === 'yellow' ? 'bg-yellow-400' : 'bg-green-400'}`}
+                            style={{ width: `${declining * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-dark/60">{Math.round(declining * 100)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {healthRecords.length === 0 ? (
               <div className="card text-center py-16">
                 <Stethoscope size={40} className="text-dark/20 mx-auto mb-3" />
@@ -2089,6 +2186,78 @@ export default function ResidentProfilePage() {
                 </button>
               )}
             </div>
+
+            {/* ── ML: Reintegration Readiness ───────────────────────────────── */}
+            {reintegration === null ? (
+              <div className="rounded-2xl border border-dark/8 bg-dark/3 p-5 animate-pulse">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain size={15} className="text-dark/30" />
+                  <span className="text-xs text-dark/35 font-bold uppercase tracking-widest">ML · Reintegration Readiness</span>
+                </div>
+                <div className="h-3 bg-dark/8 rounded w-1/2" />
+              </div>
+            ) : !reintegration.available ? (
+              <div className="rounded-2xl border border-dark/8 bg-dark/3 p-4 flex items-center gap-3">
+                <Brain size={15} className="text-dark/25 flex-shrink-0" />
+                <span className="text-xs text-dark/35 font-medium">Reintegration readiness prediction unavailable</span>
+              </div>
+            ) : (() => {
+              const risk = reintegration.predicted_risk_level;
+              const ready = reintegration.reintegration_ready;
+              const prob = reintegration.readiness_probability ?? 0;
+
+              const riskConfig: Record<string, { bar: string; badge: string }> = {
+                Low:      { bar: 'bg-green-400',  badge: 'bg-green-100 text-green-700' },
+                Medium:   { bar: 'bg-yellow-400', badge: 'bg-yellow-100 text-yellow-700' },
+                High:     { bar: 'bg-orange-400', badge: 'bg-orange-100 text-orange-700' },
+                Critical: { bar: 'bg-red-500',    badge: 'bg-red-100 text-red-700' },
+              };
+              const rc = riskConfig[risk ?? ''] ?? { bar: 'bg-dark/20', badge: 'bg-gray-100 text-gray-600' };
+
+              return (
+                <div className="rounded-2xl border border-teal/20 bg-teal/4 p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Brain size={15} className="text-teal" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Reintegration Readiness</span>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {/* Predicted risk level */}
+                    {risk && (
+                      <div className="bg-white rounded-xl p-4 shadow-sm border border-dark/6">
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Predicted Risk Level</p>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-1 rounded-full text-sm font-bold ${rc.badge}`}>{risk}</span>
+                        </div>
+                        {reintegration.risk_action && (
+                          <p className="text-xs text-dark/55 mt-2 leading-relaxed">{reintegration.risk_action}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Readiness probability */}
+                    {reintegration.readiness_probability != null && (
+                      <div className="bg-white rounded-xl p-4 shadow-sm border border-dark/6">
+                        <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Reintegration Readiness</p>
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="font-display text-2xl font-bold text-navy">{Math.round(prob * 100)}%</div>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ready ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                            {ready ? '✓ Ready' : 'Not yet ready'}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-dark/8 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700 bg-teal"
+                            style={{ width: `${prob * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-dark/40 mt-1.5">Probability of being ready for reintegration</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Status summary pills */}
             {interventionPlans.length > 0 && (() => {

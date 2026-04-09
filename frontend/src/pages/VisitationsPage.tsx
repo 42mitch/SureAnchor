@@ -220,17 +220,11 @@ function LogVisitModal({ residents, onClose, onSaved }: {
     purpose: '', observations: '', followUpNotes: '',
   });
   function set(key: string, value: string | boolean) { setForm(prev => ({ ...prev, [key]: value })); }
-  const personNameRe = /^[A-Za-z\s'\-]+$/;
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) {
       formEl.reportValidity();
-      return;
-    }
-    if (!personNameRe.test(form.socialWorker.trim())) {
-      setValidationMsg("Social worker name can only include letters, spaces, apostrophes, and hyphens.");
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
@@ -285,7 +279,7 @@ function LogVisitModal({ residents, onClose, onSaved }: {
             </div>
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Social Worker</label>
-              <input type="text" placeholder="Full name" required pattern="[A-Za-z\s'\-]+" title="Letters, spaces, apostrophes, and hyphens only." value={form.socialWorker} onChange={e => set('socialWorker', e.target.value)}
+              <input type="text" placeholder="Full name" required value={form.socialWorker} onChange={e => set('socialWorker', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
             </div>
             <div>
