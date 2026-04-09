@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   HeartHandshake, Users, Sparkles, Plus, X, Trash2, Search,
   Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil
@@ -1126,6 +1127,7 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 export default function DonorsPage() {
   const { user } = useAuth();
   const isAdmin = user?.roles.includes('Admin') ?? false;
+  const [searchParams] = useSearchParams();
 
   const [supporters, setSupporters] = useState<Supporter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1164,6 +1166,24 @@ export default function DonorsPage() {
   });
 
   const donorsPag = useListPagination(filtered, [search, typeFilter, statusFilter]);
+
+  const supporterIdParam = searchParams.get('supporterId');
+
+  // Deep-link from dashboard Recent Activity: /admin/donors?supporterId=123
+  useEffect(() => {
+    if (loading) return;
+    if (!supporterIdParam) return;
+    const id = parseInt(supporterIdParam, 10);
+    if (!Number.isFinite(id)) return;
+    if (!supporters.some(s => s.supporterId === id)) return;
+    setSelectedId(id);
+    const idx = filtered.findIndex(s => s.supporterId === id);
+    if (idx >= 0) {
+      donorsPag.setPage(Math.floor(idx / donorsPag.pageSize));
+    }
+    // Intentionally omit `filtered` from deps so typing in search does not re-apply the URL selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, supporterIdParam, supporters, donorsPag.pageSize, donorsPag.setPage]);
   const totalDonors = supporters.length;
   const activeDonors = supporters.filter(s => s.status === 'Active').length;
   const totalDonated = supporters.reduce((sum, s) => sum + s.totalDonated, 0);

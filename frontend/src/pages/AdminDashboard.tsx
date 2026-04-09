@@ -340,7 +340,7 @@ export default function AdminDashboard() {
       text: `New resident admitted to ${r.safehouse}`,
       sub: `${r.caseNo} · ${r.category} · Risk: ${r.risk}`,
       date: r.dateAdmitted!,
-      linkTo: '/admin/caseload' as const,
+      linkTo: `/admin/resident/${r.residentId}`,
     })),
     ...recentDonations.map(d => ({
       id: `don-${d.donationId}`,
@@ -348,7 +348,7 @@ export default function AdminDashboard() {
       text: `${d.donationType} donation received`,
       sub: `${d.donorName} · via ${d.channelSource || 'Direct'} · ${d.amount ? formatUsdK(phpToUsd(Number(d.amount))) : d.impactUnit}`,
       date: d.donationDate,
-      linkTo: '/admin/donors' as const,
+      linkTo: `/admin/donors?supporterId=${d.supporterId}`,
     })),
   ]
     .sort((a, b) => b.date.localeCompare(a.date))
