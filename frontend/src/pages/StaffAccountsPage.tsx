@@ -146,6 +146,7 @@ function EditUserModal({
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     displayName: staffUser.displayName ?? '',
+    email: staffUser.email,
     role: staffUser.roles.includes('Admin') ? 'Admin' : 'Staff',
   });
 
@@ -153,13 +154,15 @@ function EditUserModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const emailTrimmed = form.email.trim();
+    if (!emailTrimmed) { setValidationMsg('Email cannot be empty.'); return; }
     setSaving(true);
     const res = await apiFetch(`/api/users/${staffUser.userId}`, {
       method: 'PUT',
-      body: JSON.stringify({ displayName: form.displayName, role: form.role }),
+      body: JSON.stringify({ displayName: form.displayName, email: emailTrimmed, role: form.role }),
     });
     if (res.ok) {
-      onSaved({ ...staffUser, displayName: form.displayName, roles: [form.role] });
+      onSaved({ ...staffUser, email: emailTrimmed, displayName: form.displayName, roles: [form.role] });
       onClose();
     } else {
       const err = await res.json();
@@ -200,7 +203,7 @@ function EditUserModal({
           <div className="sticky top-0 bg-white rounded-t-3xl px-6 py-5 border-b border-dark/8 flex items-center justify-between">
             <div>
               <h2 className="font-display text-xl font-bold text-navy">Edit Account</h2>
-              <p className="text-xs text-dark/40 mt-0.5">{staffUser.email}</p>
+              <p className="text-xs text-dark/40 mt-0.5">{staffUser.displayName ?? staffUser.email}</p>
             </div>
             <button onClick={onClose} className="text-dark/35 hover:text-dark hover:bg-dark/6 rounded-lg p-1.5 transition-colors">
               <X size={18} />
@@ -211,6 +214,13 @@ function EditUserModal({
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Display Name</label>
               <input
                 type="text" value={form.displayName} onChange={e => set('displayName', e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Email *</label>
+              <input
+                type="email" required value={form.email} onChange={e => set('email', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
               />
             </div>
