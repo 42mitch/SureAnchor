@@ -21,6 +21,7 @@ import ScrollToTop from './components/ScrollToTop';
 import StaffAccountsPage from './pages/StaffAccountsPage';
 import MyAccountPage from './pages/MyAccountPage';
 import DonorMyAccountPage from './pages/DonorMyAccountPage';
+import SocialMediaPage from './pages/SocialMediaPage';
 
 function App() {
   return (
@@ -88,6 +89,12 @@ function App() {
           <Route path="/admin/my-account" element={
             <RequireAuth roles={['Admin', 'Staff']}>
               <MyAccountPage />
+            </RequireAuth>
+          } />
+
+          <Route path="/admin/social-media" element={
+            <RequireAuth roles={['Admin']}>
+              <SocialMediaPage />
             </RequireAuth>
           } />
 
