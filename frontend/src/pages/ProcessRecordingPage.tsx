@@ -3,6 +3,7 @@ import { Plus, X, FileText, ChevronRight, Search, Trash2, Pencil } from 'lucide-
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import { formatSafehouseName } from '../utils/currency';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
@@ -194,7 +195,7 @@ function NewSessionModal({ residents, onClose, onSaved }: {
               <select required value={form.residentId} onChange={e => set('residentId', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                 <option value="">Select resident...</option>
-                {residents.map(r => <option key={r.residentId} value={r.residentId}>Resident {r.internalCode} ({r.safehouse})</option>)}
+                {residents.map(r => <option key={r.residentId} value={r.residentId}>Resident {r.internalCode} ({formatSafehouseName(r.safehouse)})</option>)}
               </select>
             </div>
             <div>
@@ -357,7 +358,7 @@ function EditSessionModal({ note, residents, onClose, onSaved }: {
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                 {residents.map(r => (
                   <option key={r.residentId} value={r.residentId}>
-                    Resident {r.internalCode} ({r.safehouse})
+                    Resident {r.internalCode} ({formatSafehouseName(r.safehouse)})
                   </option>
                 ))}
               </select>
@@ -494,18 +495,18 @@ export default function ProcessRecordingPage() {
                 placeholder="Search by resident, worker, or type..."
                 className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30" />
             </div>
-            <select value={sessionTypeFilter} onChange={e => setSessionTypeFilter(e.target.value)}
+            <select aria-label="Filter by session type" value={sessionTypeFilter} onChange={e => setSessionTypeFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
               <option value="">Session Type</option>
               <option value="Individual">Individual</option>
               <option value="Group">Group</option>
             </select>
-            <select value={emotionFilter} onChange={e => setEmotionFilter(e.target.value)}
+            <select aria-label="Filter by emotional state" value={emotionFilter} onChange={e => setEmotionFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
               <option value="">Emotional State</option>
               {emotionOptions.map(o => <option key={o}>{o}</option>)}
             </select>
-            <select value={concernsFilter} onChange={e => setConcernsFilter(e.target.value)}
+            <select aria-label="Filter by concerns flagged" value={concernsFilter} onChange={e => setConcernsFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
               <option value="">Concerns</option>
               <option value="Flagged">Flagged Only</option>

@@ -83,7 +83,7 @@ public class UsersController : ControllerBase
     }
 
     // ── PUT /api/users/{id} ───────────────────────────────────────────────────
-    // Updates display name and/or role of an existing staff account.
+    // Updates display name, email, and/or role of an existing staff account.
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string id, [FromBody] StaffUserUpdateDto dto)
     {
@@ -96,6 +96,36 @@ public class UsersController : ControllerBase
         // Update display name
         if (!string.IsNullOrWhiteSpace(dto.DisplayName))
             user.DisplayName = dto.DisplayName.Trim();
+
+        // Update email if provided and changed
+        if (!string.IsNullOrWhiteSpace(dto.Email))
+        {
+            var newEmail = dto.Email.Trim().ToLowerInvariant();
+            if (!string.Equals(user.Email, newEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                var existing = await _userManager.FindByEmailAsync(newEmail);
+                if (existing != null && existing.Id != id)
+                    return Conflict(new { message = "An account with that email already exists." });
+
+                var emailResult = await _userManager.SetEmailAsync(user, newEmail);
+                if (!emailResult.Succeeded)
+                {
+                    var errs = emailResult.Errors.Select(e => e.Description).ToList();
+                    return BadRequest(new { message = errs.First(), errors = errs });
+                }
+
+                var userNameResult = await _userManager.SetUserNameAsync(user, newEmail);
+                if (!userNameResult.Succeeded)
+                {
+                    var errs = userNameResult.Errors.Select(e => e.Description).ToList();
+                    return BadRequest(new { message = errs.First(), errors = errs });
+                }
+
+                // Re-confirm email so account stays active after the change
+                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                await _userManager.ConfirmEmailAsync(user, token);
+            }
+        }
 
         await _userManager.UpdateAsync(user);
 
@@ -185,6 +215,7 @@ public record StaffUserWriteDto(
 
 public record StaffUserUpdateDto(
     string? DisplayName,
+    string? Email,
     string Role
 );
 

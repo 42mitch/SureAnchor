@@ -99,3 +99,17 @@ export function formatCurrencyDetailed(
 export function formatCurrencyAxis(php: number): string {
   return formatUsdK(phpToUsd(php));
 }
+
+/**
+ * Normalize safehouse display names.
+ * Strips "Lighthouse" so "Lighthouse Safehouse 1" → "Safehouse 1"
+ * and bare numbers like "Lighthouse 2" → "Safehouse 2".
+ */
+export function formatSafehouseName(name: string): string {
+  if (!name) return name;
+  const cleaned = name.replace(/\bLighthouse\b\s*/gi, '').trim();
+  if (!cleaned) return name;
+  // If what remains starts with a digit, prepend "Safehouse"
+  if (/^\d/.test(cleaned)) return `Safehouse ${cleaned}`;
+  return cleaned;
+}

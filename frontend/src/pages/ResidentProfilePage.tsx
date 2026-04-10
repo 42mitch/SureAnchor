@@ -10,6 +10,7 @@ import {
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import { formatSafehouseName } from '../utils/currency';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
@@ -1313,7 +1314,7 @@ export default function ResidentProfilePage() {
               <div className="flex flex-wrap gap-4 text-white/60 text-sm mt-2">
                 <span className="flex items-center gap-1.5">
                   <MapPin size={13} />
-                  {resident.safehouse}
+                  {formatSafehouseName(resident.safehouse)}
                 </span>
                 {resident.dateAdmitted && (
                   <span className="flex items-center gap-1.5">
@@ -1443,7 +1444,7 @@ export default function ResidentProfilePage() {
 
                 {[
                   { label: 'Date Admitted', value: resident.dateAdmitted ?? '—' },
-                  { label: 'Safe House', value: resident.safehouse },
+                  { label: 'Safe House', value: formatSafehouseName(resident.safehouse) },
                   { label: 'Current Status', value: resident.status },
                   { label: 'Risk Level', value: resident.risk },
                   ...(resident.reintegrationType ? [{ label: 'Reintegration Type', value: resident.reintegrationType }] : []),
@@ -1921,9 +1922,12 @@ export default function ResidentProfilePage() {
                 <span className="text-xs text-dark/35 font-medium">Loading health trajectory prediction…</span>
               </div>
             ) : !healthTrajectory.available ? (
-              <div className="rounded-2xl border border-dark/8 bg-dark/3 p-4 flex items-center gap-3">
-                <Brain size={16} className="text-dark/25 flex-shrink-0" />
-                <span className="text-xs text-dark/35 font-medium">Health trajectory prediction unavailable</span>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3">
+                <Brain size={16} className="text-amber-500 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-amber-700">ML · Health Trajectory — Unavailable</p>
+                  <p className="text-xs text-amber-600 mt-0.5">{healthTrajectory.reason ?? 'ML service not connected. Set MlService__BaseUrl in App Service configuration.'}</p>
+                </div>
               </div>
             ) : (() => {
               const traj = healthTrajectory.trajectory!;
@@ -2197,9 +2201,12 @@ export default function ResidentProfilePage() {
                 <div className="h-3 bg-dark/8 rounded w-1/2" />
               </div>
             ) : !reintegration.available ? (
-              <div className="rounded-2xl border border-dark/8 bg-dark/3 p-4 flex items-center gap-3">
-                <Brain size={15} className="text-dark/25 flex-shrink-0" />
-                <span className="text-xs text-dark/35 font-medium">Reintegration readiness prediction unavailable</span>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3">
+                <Brain size={15} className="text-amber-500 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-amber-700">ML · Reintegration Readiness — Unavailable</p>
+                  <p className="text-xs text-amber-600 mt-0.5">{reintegration.reason ?? 'ML service not connected. Set MlService__BaseUrl in App Service configuration.'}</p>
+                </div>
               </div>
             ) : (() => {
               const risk = reintegration.predicted_risk_level;

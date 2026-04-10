@@ -2,14 +2,31 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, AlertTriangle, CheckCircle, FileText,
-  ChevronRight, User, ClipboardX, X, Search,
+  ChevronRight, User, ClipboardX, X, Search, Brain, TrendingDown, Minus,
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
+import { formatSafehouseName } from '../utils/currency';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface MlHealthRisk {
+  residentId: number;
+  internalCode: string;
+  safehouse: string;
+  worker: string | null;
+  alertLevel: 'red' | 'yellow';
+  trajectory: string;
+  decliningProbability: number;
+  recommendedAction: string;
+}
+interface MlHealthBatchResult {
+  available: boolean;
+  atRisk?: MlHealthRisk[];
+  reason?: string;
+}
 
 interface Flag {
   recordingId: number;
@@ -326,6 +343,7 @@ export default function SafetyPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [criticalResidents, setCriticalResidents] = useState<CriticalResident[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mlHealth, setMlHealth] = useState<MlHealthBatchResult | null>(null);
 
   const [removingFlags, setRemovingFlags] = useState<Set<number>>(new Set());
   const [removingIncidents, setRemovingIncidents] = useState<Set<number>>(new Set());
@@ -351,6 +369,13 @@ export default function SafetyPage() {
       setIncidents(incidentData as Incident[]);
       setCriticalResidents((residents as CriticalResident[]).filter((r: CriticalResident) => r.risk === 'Critical'));
     }).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    apiFetch('/api/ml/health-trajectory-batch')
+      .then(r => r.ok ? r.json() : { available: false })
+      .then(setMlHealth)
+      .catch(() => setMlHealth({ available: false }));
   }, []);
 
   function startRemoving<T>(
@@ -494,7 +519,7 @@ export default function SafetyPage() {
                                 <span className="font-mono text-sm font-semibold text-navy">Resident {r.internalCode}</span>
                               </div>
                             </td>
-                            <td className="px-5 py-4 text-sm text-dark/65">{r.safehouse}</td>
+                            <td className="px-5 py-4 text-sm text-dark/65">{formatSafehouseName(r.safehouse)}</td>
                             <td className="px-5 py-4 text-sm text-dark/65">{r.age}</td>
                             <td className="px-5 py-4 text-sm text-dark/65">{r.category || '—'}</td>
                             <td className="px-5 py-4">{riskBadge(r.risk)}</td>
@@ -517,6 +542,117 @@ export default function SafetyPage() {
                     startIndex={criticalPag.startIndex}
                     endIndex={criticalPag.endIndex}
                   />
+                </div>
+              )}
+            </section>
+
+            {/* ── ML · Projected Health Risk ─────────────────────────────── */}
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <Brain size={16} className="text-purple-500" />
+                <h2 className="font-display text-lg font-bold text-navy">Projected Health Risk</h2>
+                <span className="text-xs text-dark/40 font-medium">ML prediction</span>
+                {mlHealth?.available && (mlHealth.atRisk?.length ?? 0) > 0 && (
+                  <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                    {mlHealth.atRisk!.length}
+                  </span>
+                )}
+              </div>
+
+              {mlHealth === null ? (
+                <div className="card flex items-center gap-3 animate-pulse">
+                  <Brain size={15} className="text-dark/25" />
+                  <span className="text-xs text-dark/35 font-medium">Running health trajectory analysis across all active residents…</span>
+                </div>
+              ) : !mlHealth.available ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3">
+                  <Brain size={15} className="text-amber-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700">ML · Health Trajectory — Unavailable</p>
+                    <p className="text-xs text-amber-600 mt-0.5">ML service not connected. Predicted risk cannot be assessed.</p>
+                  </div>
+                </div>
+              ) : (mlHealth.atRisk?.length ?? 0) === 0 ? (
+                <div className="card flex flex-col items-center py-8 text-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                    <CheckCircle size={22} className="text-green-600" />
+                  </div>
+                  <p className="font-semibold text-dark/60 text-sm">No residents projected at health risk</p>
+                  <p className="text-dark/35 text-xs">All active residents show stable or improving predicted trajectories.</p>
+                </div>
+              ) : (
+                <div className="card overflow-hidden p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-dark/8 bg-cream/70">
+                          {['Resident', 'Safehouse', 'Social Worker', 'Trajectory', 'Decline Risk', 'Recommended Action', ''].map(h => (
+                            <th key={h} className="text-left text-xs font-semibold text-dark/40 uppercase tracking-wide px-5 py-3.5">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(mlHealth.atRisk ?? []).map((r, i) => {
+                          const isRed = r.alertLevel === 'red';
+                          return (
+                            <tr
+                              key={r.residentId}
+                              onClick={() => navigate(`/admin/resident/${r.residentId}`)}
+                              className={`border-b border-dark/5 last:border-0 cursor-pointer transition-colors group ${
+                                isRed ? 'hover:bg-red-50/40' : 'hover:bg-yellow-50/40'
+                              } ${i % 2 !== 0 ? 'bg-cream/30' : ''}`}
+                            >
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                    isRed ? 'bg-red-50 border border-red-100' : 'bg-yellow-50 border border-yellow-100'
+                                  }`}>
+                                    {isRed
+                                      ? <TrendingDown size={14} className="text-red-400" />
+                                      : <Minus size={14} className="text-yellow-500" />
+                                    }
+                                  </div>
+                                  <span className="font-mono text-sm font-semibold text-navy">Resident {r.internalCode}</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-4 text-sm text-dark/65">{formatSafehouseName(r.safehouse)}</td>
+                              <td className="px-5 py-4 text-sm text-dark/65">{r.worker || '—'}</td>
+                              <td className="px-5 py-4">
+                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                                  isRed
+                                    ? 'bg-red-100 text-red-700 border-red-200'
+                                    : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                                }`}>
+                                  {isRed ? 'Declining Risk' : 'Watch Closely'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1.5 bg-dark/8 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${isRed ? 'bg-red-400' : 'bg-yellow-400'}`}
+                                      style={{ width: `${Math.round(r.decliningProbability * 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className={`text-xs font-bold tabular-nums ${isRed ? 'text-red-600' : 'text-yellow-600'}`}>
+                                    {Math.round(r.decliningProbability * 100)}%
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-4 text-xs text-dark/55 max-w-xs">
+                                {r.recommendedAction.split(':').slice(-1)[0].trim()}
+                              </td>
+                              <td className="px-5 py-4">
+                                <ChevronRight size={16} className={`text-dark/20 group-hover:translate-x-0.5 transition-all ${
+                                  isRed ? 'group-hover:text-red-400' : 'group-hover:text-yellow-500'
+                                }`} />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </section>
@@ -596,7 +732,7 @@ export default function SafetyPage() {
                           placeholder="Search incidents..."
                           className="w-full pl-8 pr-4 py-2 rounded-xl border border-dark/12 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
                       </div>
-                      <select value={severityFilter} onChange={e => setSeverityFilter(e.target.value)}
+                      <select aria-label="Filter by severity" value={severityFilter} onChange={e => setSeverityFilter(e.target.value)}
                         className="px-3 py-2 rounded-xl border border-dark/12 bg-white text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
                         <option value="">Severity</option>
                         <option value="Low">Low</option>
@@ -604,7 +740,7 @@ export default function SafetyPage() {
                         <option value="High">High</option>
                         <option value="Critical">Critical</option>
                       </select>
-                      <select value={incidentTypeFilter} onChange={e => setIncidentTypeFilter(e.target.value)}
+                      <select aria-label="Filter by incident type" value={incidentTypeFilter} onChange={e => setIncidentTypeFilter(e.target.value)}
                         className="px-3 py-2 rounded-xl border border-dark/12 bg-white text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
                         <option value="">Incident Type</option>
                         {incidentTypeOptions.map(o => <option key={o}>{o}</option>)}

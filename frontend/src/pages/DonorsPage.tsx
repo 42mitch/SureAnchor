@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   HeartHandshake, Users, Sparkles, Plus, X, Trash2, Search,
-  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil, Target
+  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil, Target, Brain
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +15,15 @@ import { CurrencyDisplay, CurrencyDisplayDetailed } from '../components/Currency
 import DonationAllocationsSection from '../components/DonationAllocationsSection';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ChurnPrediction {
+  supporter_id: number;
+  display_name: string;
+  churn_probability: number;
+  risk_tier: 'Critical' | 'High' | 'Medium' | 'Low';
+  recommended_action: string;
+}
+interface ChurnResult { available: boolean; predictions?: ChurnPrediction[]; reason?: string; }
 
 interface Supporter {
   supporterId: number;
@@ -216,14 +226,6 @@ function EditSupporterModal({
                   {['MonetaryDonor','InKindDonor','Volunteer','SkillsContributor','SocialMediaAdvocate','PartnerOrganization'].map(o => (
                     <option key={o} value={o}>{o}</option>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Status</label>
-                <select value={form.status} onChange={e => set('status', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
-                  <option>Active</option>
-                  <option>Inactive</option>
                 </select>
               </div>
               <div className="sm:col-span-2">
@@ -433,6 +435,27 @@ function EditDonationModal({
 
 // ─── Add Donation Modal ───────────────────────────────────────────────────────
 
+// Unit options: label, stored value, fixed PHP rate (null = user supplies rate)
+const UNIT_OPTIONS: { label: string; value: string; phpRate: number | null; isCurrency: boolean }[] = [
+  { label: 'Philippine Peso (₱)', value: 'PHP',   phpRate: 1,    isCurrency: true  },
+  { label: 'US Dollar (USD)',      value: 'USD',   phpRate: 56,   isCurrency: true  },
+  { label: 'Euro (EUR)',           value: 'EUR',   phpRate: 61,   isCurrency: true  },
+  { label: 'Hours',                value: 'Hours', phpRate: null, isCurrency: false },
+  { label: 'Meals',                value: 'Meals', phpRate: null, isCurrency: false },
+  { label: 'Items / Pieces',       value: 'Items', phpRate: null, isCurrency: false },
+  { label: 'Kilograms (kg)',       value: 'kg',    phpRate: null, isCurrency: false },
+  { label: 'Days',                 value: 'Days',  phpRate: null, isCurrency: false },
+  { label: 'Other',                value: 'Other', phpRate: null, isCurrency: false },
+];
+
+/** Map frontend unit display values → DB-allowed impact_unit values */
+function toImpactUnit(unit: string): string | null {
+  if (['PHP', 'USD', 'EUR'].includes(unit)) return 'pesos';
+  if (['Hours', 'Days'].includes(unit))     return 'hours';
+  if (['Items', 'Meals', 'kg'].includes(unit)) return 'items';
+  return null; // 'Other' and unknown → NULL (allowed by constraint)
+}
+
 function AddDonationModal({
   supporterId,
   supporterName,
@@ -447,73 +470,85 @@ function AddDonationModal({
   const [saving, setSaving] = useState(false);
   const [validationMsg, setValidationMsg] = useState('');
   const [form, setForm] = useState({
-    donationType: 'Monetary',
-    donationDate: new Date().toISOString().slice(0, 10),
-    isRecurring: false,
-    campaignName: '',
-    channelSource: '',
-    currencyCode: 'PHP',
-    amount: '',
-    estimatedValue: '',
-    impactUnit: '',
-    notes: '',
+    donationType:   'Monetary',
+    donationDate:   new Date().toISOString().slice(0, 10),
+    isRecurring:    false,
+    campaignName:   '',
+    channelSource:  '',
+    unit:           'PHP',
+    amount:         '',
+    phpRatePerUnit: '',
+    notes:          '',
   });
 
   function set(key: string, value: string | boolean) {
     setForm(prev => ({ ...prev, [key]: value }));
   }
 
+  const selectedUnit = UNIT_OPTIONS.find(u => u.value === form.unit) ?? UNIT_OPTIONS[0];
+
+  const computedPhpEstimate = (): number | null => {
+    const qty = parseFloat(form.amount);
+    if (!Number.isFinite(qty) || qty < 0) return null;
+    if (selectedUnit.phpRate != null) return Math.round(qty * selectedUnit.phpRate * 100) / 100;
+    const rate = parseFloat(form.phpRatePerUnit);
+    if (!Number.isFinite(rate) || rate < 0) return null;
+    return Math.round(qty * rate * 100) / 100;
+  };
+
+  const phpEstimate = computedPhpEstimate();
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const formEl = e.currentTarget as HTMLFormElement;
     if (!formEl.checkValidity()) { formEl.reportValidity(); return; }
     const today = new Date().toISOString().slice(0, 10);
-    if (form.donationDate > today) {
-      setValidationMsg('Donation date cannot be in the future.');
-      return;
-    }
-    const amount = form.amount.trim() === '' ? null : parseFloat(form.amount);
-    const estimatedValue = form.estimatedValue.trim() === '' ? null : parseFloat(form.estimatedValue);
-    if ((amount != null && amount < 0) || (estimatedValue != null && estimatedValue < 0)) {
-      setValidationMsg('Amount and estimated value cannot be negative.');
-      return;
-    }
+    if (form.donationDate > today) { setValidationMsg('Donation date cannot be in the future.'); return; }
+    const qty = form.amount.trim() === '' ? null : parseFloat(form.amount);
+    if (qty != null && qty < 0) { setValidationMsg('Amount cannot be negative.'); return; }
+
+    const monetaryAmount = selectedUnit.isCurrency ? qty : null;
+    const currencyCode   = selectedUnit.isCurrency ? selectedUnit.value : 'PHP';
+
     setSaving(true);
     const res = await apiFetch('/api/donations', {
       method: 'POST',
       body: JSON.stringify({
         supporterId,
-        donationType: form.donationType,
-        donationDate: form.donationDate,
-        isRecurring: form.isRecurring,
-        campaignName: form.campaignName.trim() || null,
-        channelSource: form.channelSource.trim() || null,
-        currencyCode: form.currencyCode.trim() || 'PHP',
-        amount: Number.isFinite(amount as number) ? amount : null,
-        estimatedValue: Number.isFinite(estimatedValue as number) ? estimatedValue : null,
-        impactUnit: form.impactUnit.trim() || null,
-        notes: form.notes.trim() || null,
+        donationType:   form.donationType,
+        donationDate:   form.donationDate,
+        isRecurring:    form.isRecurring,
+        campaignName:   form.campaignName.trim() || null,
+        channelSource:  form.channelSource.trim() || null,
+        currencyCode,
+        amount:         monetaryAmount,
+        estimatedValue: phpEstimate ?? null,
+        impactUnit:     toImpactUnit(form.unit),
+        notes:          form.notes.trim() || null,
       }),
     });
     if (res.ok) {
       const { donationId } = await res.json();
       onSaved({
         donationId,
-        donationType: form.donationType,
-        donationDate: form.donationDate,
-        isRecurring: form.isRecurring,
-        campaignName: form.campaignName.trim() || null,
-        channelSource: form.channelSource.trim() || null,
-        currencyCode: form.currencyCode.trim() || 'PHP',
-        amount: Number.isFinite(amount as number) ? amount : null,
-        estimatedValue: Number.isFinite(estimatedValue as number) ? estimatedValue : null,
-        impactUnit: form.impactUnit.trim() || null,
-        notes: form.notes.trim() || null,
+        donationType:   form.donationType,
+        donationDate:   form.donationDate,
+        isRecurring:    form.isRecurring,
+        campaignName:   form.campaignName.trim() || null,
+        channelSource:  form.channelSource.trim() || null,
+        currencyCode,
+        amount:         monetaryAmount,
+        estimatedValue: phpEstimate ?? null,
+        impactUnit:     toImpactUnit(form.unit),
+        notes:          form.notes.trim() || null,
       });
       onClose();
     } else {
       const d = await res.json().catch(() => ({}));
-      setValidationMsg(d.error ?? d.message ?? 'Failed to save donation.');
+      const msg = d.error ?? d.message ?? 'Failed to save donation.';
+      const detail = d.detail ? `\n\nDetail: ${d.detail}` : '';
+      const stage  = d.stage  ? ` (stage: ${d.stage})`   : '';
+      setValidationMsg(`${msg}${stage}${detail}`);
     }
     setSaving(false);
   }
@@ -535,8 +570,10 @@ function AddDonationModal({
           </div>
           <form className="p-6 space-y-4" onSubmit={handleSubmit}>
             <div className="grid sm:grid-cols-2 gap-4">
+
+              {/* Type + Date */}
               <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Type</label>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Donation Type</label>
                 <select value={form.donationType} onChange={e => set('donationType', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                   {['Monetary', 'InKind', 'Time', 'Skills', 'SocialMedia'].map(t => <option key={t}>{t}</option>)}
@@ -547,19 +584,71 @@ function AddDonationModal({
                 <input type="date" required value={form.donationDate} onChange={e => set('donationDate', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
               </div>
+
+              {/* Unit + Amount */}
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Unit *</label>
+                <select value={form.unit} onChange={e => { set('unit', e.target.value); set('phpRatePerUnit', ''); }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
+                  {UNIT_OPTIONS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">
+                  {selectedUnit.isCurrency ? `Amount (${selectedUnit.value}) *` : `Quantity (${selectedUnit.value}) *`}
+                </label>
+                <input type="number" step="0.01" min="0" required value={form.amount}
+                  onChange={e => set('amount', e.target.value)}
+                  placeholder={selectedUnit.isCurrency ? '0.00' : 'e.g. 10'}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+              </div>
+
+              {/* PHP rate per unit — only for non-currency units */}
+              {!selectedUnit.isCurrency && (
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">
+                    PHP value per {selectedUnit.value}{' '}
+                    <span className="text-dark/30 font-normal normal-case">(optional — used to estimate PHP value)</span>
+                  </label>
+                  <input type="number" step="0.01" min="0" value={form.phpRatePerUnit}
+                    onChange={e => set('phpRatePerUnit', e.target.value)}
+                    placeholder={`e.g. 150 per ${selectedUnit.value}`}
+                    className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
+                </div>
+              )}
+
+              {/* PHP estimate preview — live computed */}
+              {phpEstimate != null && (
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between bg-teal/6 border border-teal/20 rounded-xl px-4 py-3">
+                    <span className="text-xs font-semibold text-teal-dark uppercase tracking-wide">
+                      Estimated Value (PHP)
+                    </span>
+                    <span className="font-display text-xl font-bold text-teal">
+                      ₱{phpEstimate.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {selectedUnit.value === 'USD' && <p className="text-xs text-dark/35 mt-1 pl-1">Rate used: ₱56 / $1 USD (approximate)</p>}
+                  {selectedUnit.value === 'EUR' && <p className="text-xs text-dark/35 mt-1 pl-1">Rate used: ₱61 / €1 EUR (approximate)</p>}
+                </div>
+              )}
+
+              {/* Recurring */}
               <div className="sm:col-span-2">
                 <label className="flex items-center gap-2 text-sm text-dark/70 cursor-pointer">
                   <input type="checkbox" checked={form.isRecurring} onChange={e => set('isRecurring', e.target.checked)} className="w-4 h-4 accent-teal" />
                   Recurring donation
                 </label>
               </div>
+
+              {/* Campaign + Channel */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Campaign name</label>
+                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Campaign Name</label>
                 <input value={form.campaignName} onChange={e => set('campaignName', e.target.value)}
                   placeholder="e.g. Year-end giving drive"
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/25" />
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Channel</label>
                 <select value={form.channelSource} onChange={e => set('channelSource', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
@@ -569,33 +658,15 @@ function AddDonationModal({
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Currency</label>
-                <input value={form.currencyCode} onChange={e => set('currencyCode', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Amount</label>
-                <input type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)}
-                  placeholder="Leave empty for in-kind/time"
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widests mb-2">Est. value (PHP)</label>
-                <input type="number" step="0.01" min="0" value={form.estimatedValue} onChange={e => set('estimatedValue', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Impact unit</label>
-                <input value={form.impactUnit} onChange={e => set('impactUnit', e.target.value)} placeholder="e.g. pesos, hours, meals"
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 placeholder-dark/30" />
-              </div>
+
+              {/* Notes */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Notes</label>
                 <textarea rows={3} value={form.notes} onChange={e => set('notes', e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 resize-none" />
               </div>
             </div>
+
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={onClose}
                 className="flex-1 py-3 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
@@ -612,6 +683,21 @@ function AddDonationModal({
     </>
   );
 }
+
+interface DonorChurnProfile {
+  available: boolean;
+  reason?: string;
+  churn_probability?: number;
+  risk_tier?: string;
+  recommended_action?: string;
+}
+
+const CHURN_TIER_BADGE: Record<string, string> = {
+  Critical: 'bg-red-100 text-red-700',
+  High: 'bg-orange-100 text-orange-800',
+  Medium: 'bg-amber-100 text-amber-900',
+  Low: 'bg-green-100 text-green-700',
+};
 
 // ─── Donor Detail Modal ───────────────────────────────────────────────────────
 
@@ -635,12 +721,33 @@ function DonorDetailModal({
   const [editingSupporter, setEditingSupporter] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SupporterDetail | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deletingDonation, setDeletingDonation] = useState<DonationRow | null>(null);
+  const [deleteDonationLoading, setDeleteDonationLoading] = useState(false);
+  const [churnRisk, setChurnRisk] = useState<DonorChurnProfile | null>(null);
+  const [churnLoading, setChurnLoading] = useState(true);
 
   useEffect(() => {
     apiFetch(`/api/supporters/${supporterId}`)
       .then(r => r.ok ? r.json() : null)
       .then(setDetail)
       .finally(() => setLoading(false));
+  }, [supporterId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setChurnLoading(true);
+    setChurnRisk(null);
+    apiFetch(`/api/ml/donor-churn/${supporterId}`)
+      .then(r => (r.ok ? r.json() : { available: false, reason: 'Could not load churn risk' }))
+      .then((data: DonorChurnProfile) => {
+        if (!cancelled) setChurnRisk(data);
+      })
+      .finally(() => {
+        if (!cancelled) setChurnLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [supporterId]);
 
   const donationList = detail?.donations ?? [];
@@ -655,6 +762,18 @@ function DonorDetailModal({
     setDeleteLoading(false);
     onDonationsUpdated?.();
     onClose();
+  }
+
+  async function handleDeleteDonation() {
+    if (!deletingDonation) return;
+    setDeleteDonationLoading(true);
+    await apiFetch(`/api/donations/${deletingDonation.donationId}`, { method: 'DELETE' });
+    setDetail(prev =>
+      prev ? { ...prev, donations: prev.donations.filter(d => d.donationId !== deletingDonation.donationId) } : null
+    );
+    onDonationsUpdated?.();
+    setDeletingDonation(null);
+    setDeleteDonationLoading(false);
   }
 
   return (
@@ -677,9 +796,18 @@ function DonorDetailModal({
                   {detail && (
                     <div className="flex items-center gap-2 mt-1">
                       {typeBadge(detail.supporterType)}
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${detail.status === 'Active' ? 'bg-green-400/20 text-green-200' : 'bg-white/20 text-white/60'}`}>
-                        {detail.status}
-                      </span>
+                      {churnLoading ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 text-white/40">—</span>
+                      ) : churnRisk?.available && churnRisk.risk_tier ? (
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          churnRisk.risk_tier === 'Critical' ? 'bg-red-400/30 text-red-100' :
+                          churnRisk.risk_tier === 'High'     ? 'bg-orange-400/30 text-orange-100' :
+                          churnRisk.risk_tier === 'Medium'   ? 'bg-yellow-400/30 text-yellow-100' :
+                                                               'bg-green-400/20 text-green-200'
+                        }`}>
+                          {churnRisk.risk_tier} Risk
+                        </span>
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -748,6 +876,37 @@ function DonorDetailModal({
 
             {/* Contact & Info */}
             <div className="grid sm:grid-cols-2 gap-4">
+              <div className="flex items-start gap-3 bg-navy/5 rounded-xl px-4 py-3 sm:col-span-2 border border-navy/10">
+                <div className="w-7 h-7 rounded-lg bg-navy/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Brain size={13} className="text-navy" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide">Churn risk (model)</p>
+                  {churnLoading ? (
+                    <p className="text-sm text-dark/45 mt-1.5">Loading prediction…</p>
+                  ) : !churnRisk?.available ? (
+                    <p className="text-sm text-dark/45 mt-1.5">{churnRisk?.reason ?? 'Prediction unavailable'}</p>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                            CHURN_TIER_BADGE[churnRisk.risk_tier ?? ''] ?? 'bg-dark/10 text-dark/60'
+                          }`}
+                        >
+                          {churnRisk.risk_tier ?? '—'}
+                        </span>
+                        <span className="text-sm font-bold text-navy">
+                          {Math.round((churnRisk.churn_probability ?? 0) * 100)}% churn probability
+                        </span>
+                      </div>
+                      {churnRisk.recommended_action && (
+                        <p className="text-xs text-dark/55 leading-relaxed">{churnRisk.recommended_action}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
               {[
                 detail.email            && { icon: Mail,      label: 'Email',            value: detail.email },
                 detail.phone            && { icon: Phone,     label: 'Phone',            value: detail.phone },
@@ -836,22 +995,33 @@ function DonorDetailModal({
                           )}
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        {d.amount != null ? (
-                          <CurrencyDisplayDetailed
-                            php={d.amount}
-                            className="items-end"
-                            usdClassName="font-display text-lg font-bold text-navy"
-                          />
-                        ) : d.estimatedValue != null ? (
-                          <CurrencyDisplay
-                            php={d.estimatedValue}
-                            className="items-end"
-                            usdClassName="text-sm font-semibold text-dark/60"
-                            phpClassName="text-xs text-dark/30 font-normal"
-                          />
-                        ) : (
-                          <span className="text-sm text-dark/30 italic">In-kind / Time</span>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="text-right">
+                          {d.amount != null ? (
+                            <CurrencyDisplayDetailed
+                              php={d.amount}
+                              className="items-end"
+                              usdClassName="font-display text-lg font-bold text-navy"
+                            />
+                          ) : d.estimatedValue != null ? (
+                            <CurrencyDisplay
+                              php={d.estimatedValue}
+                              className="items-end"
+                              usdClassName="text-sm font-semibold text-dark/60"
+                              phpClassName="text-xs text-dark/30 font-normal"
+                            />
+                          ) : (
+                            <span className="text-sm text-dark/30 italic">In-kind / Time</span>
+                          )}
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setDeletingDonation(d); }}
+                            className="p-1.5 rounded-lg text-dark/25 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                            title="Delete donation"
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -930,6 +1100,16 @@ function DonorDetailModal({
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
           loading={deleteLoading}
+        />
+      )}
+
+      {deletingDonation && (
+        <ConfirmDeleteModal
+          title="Delete Donation"
+          description={`Are you sure you want to permanently delete this ${deletingDonation.donationType} donation from ${deletingDonation.donationDate}${deletingDonation.campaignName ? ` (${deletingDonation.campaignName})` : ''}? This cannot be undone.`}
+          onConfirm={handleDeleteDonation}
+          onCancel={() => setDeletingDonation(null)}
+          loading={deleteDonationLoading}
         />
       )}
     </div>
@@ -1019,13 +1199,6 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Status</label>
-                <select value={form.status} onChange={e => set('status', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
-                  <option>Active</option><option>Inactive</option>
-                </select>
-              </div>
-              <div>
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Acquisition Channel</label>
                 <select value={form.acquisitionChannel} onChange={e => set('acquisitionChannel', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
@@ -1058,6 +1231,7 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 export default function DonorsPage() {
   const { user } = useAuth();
   const isAdmin = user?.roles.includes('Admin') ?? false;
+  const [searchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<'donors' | 'allocations'>('donors');
   const [supporters, setSupporters] = useState<Supporter[]>([]);
@@ -1069,9 +1243,20 @@ export default function DonorsPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Supporter | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [pageChurn, setPageChurn] = useState<ChurnResult | null>(null);
 
   useEffect(() => {
-    apiFetch('/api/supporters').then(r => r.ok ? r.json() : []).then(setSupporters).finally(() => setLoading(false));
+    apiFetch('/api/supporters').then(r => r.ok ? r.json() : []).then((data: Supporter[]) => {
+      setSupporters(data);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  // Fetch page-level churn predictions once on mount
+  useEffect(() => {
+    apiFetch('/api/ml/donor-churn')
+      .then(r => r.ok ? r.json() : { available: false })
+      .then(setPageChurn)
+      .catch(() => setPageChurn({ available: false }));
   }, []);
 
   async function handleDelete() {
@@ -1087,16 +1272,39 @@ export default function DonorsPage() {
     apiFetch('/api/supporters').then(r => r.ok ? r.json() : []).then(setSupporters);
   }
 
+  // Build a fast lookup: supporterId → churn prediction
+  const churnMap = new Map(
+    (pageChurn?.predictions ?? []).map(p => [p.supporter_id, p])
+  );
+
   const filtered = supporters.filter(s => {
     const matchSearch = !search ||
       s.displayName.toLowerCase().includes(search.toLowerCase()) ||
       (s.email ?? '').toLowerCase().includes(search.toLowerCase());
     const matchType = !typeFilter || s.supporterType === typeFilter;
-    const matchStatus = !statusFilter || s.status === statusFilter;
+    const matchStatus = !statusFilter || (churnMap.get(s.supporterId)?.risk_tier ?? 'Low') === statusFilter;
     return matchSearch && matchType && matchStatus;
   });
 
   const donorsPag = useListPagination(filtered, [search, typeFilter, statusFilter]);
+
+  const supporterIdParam = searchParams.get('supporterId');
+
+  // Deep-link from dashboard Recent Activity: /admin/donors?supporterId=123
+  useEffect(() => {
+    if (loading) return;
+    if (!supporterIdParam) return;
+    const id = parseInt(supporterIdParam, 10);
+    if (!Number.isFinite(id)) return;
+    if (!supporters.some(s => s.supporterId === id)) return;
+    setSelectedId(id);
+    const idx = filtered.findIndex(s => s.supporterId === id);
+    if (idx >= 0) {
+      donorsPag.setPage(Math.floor(idx / donorsPag.pageSize));
+    }
+    // Intentionally omit `filtered` from deps so typing in search does not re-apply the URL selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, supporterIdParam, supporters, donorsPag.pageSize, donorsPag.setPage]);
   const totalDonors = supporters.length;
   const activeDonors = supporters.filter(s => s.status === 'Active').length;
   const totalDonated = supporters.reduce((sum, s) => sum + s.totalDonated, 0);
@@ -1183,7 +1391,7 @@ export default function DonorsPage() {
                 placeholder="Search by name or email..."
                 className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30" />
             </div>
-            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+            <select aria-label="Filter by supporter type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
               <option value="">Supporter Type</option>
               <option value="MonetaryDonor">Monetary Donor</option>
@@ -1193,11 +1401,13 @@ export default function DonorsPage() {
               <option value="SocialMediaAdvocate">Social Media Advocate</option>
               <option value="PartnerOrganization">Partner Organization</option>
             </select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            <select aria-label="Filter by churn risk" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
-              <option value="">Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
+              <option value="">Churn Risk</option>
+              <option value="Critical">Critical</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
             </select>
           </div>
         </div>
@@ -1216,7 +1426,7 @@ export default function DonorsPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-dark/8 bg-cream/70">
-                      {['Name', 'Type', 'Status', 'Total Contributed', 'Last Donation', 'Country', ''].map(h => (
+                      {['Name', 'Type', 'Churn Risk', 'Total Contributed', 'Last Donation', 'Country', ''].map(h => (
                         <th key={h} className="text-left text-xs font-semibold text-dark/40 uppercase tracking-wide px-5 py-3.5 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -1241,9 +1451,18 @@ export default function DonorsPage() {
                         </td>
                         <td className="px-5 py-3.5">{typeBadge(s.supporterType)}</td>
                         <td className="px-5 py-3.5">
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${s.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {s.status}
-                          </span>
+                          {pageChurn === null ? (
+                            <span className="text-xs text-dark/25 animate-pulse">—</span>
+                          ) : !pageChurn.available ? (
+                            <span className="text-xs text-dark/30 italic">No ML</span>
+                          ) : (() => {
+                            const tier = churnMap.get(s.supporterId)?.risk_tier ?? 'Low';
+                            return (
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${CHURN_TIER_BADGE[tier] ?? 'bg-green-100 text-green-700'}`}>
+                                {tier}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-5 py-3.5">
                           {s.totalDonated > 0

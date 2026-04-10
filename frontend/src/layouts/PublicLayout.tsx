@@ -153,9 +153,12 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
             </div>
 
             {/* Mobile hamburger */}
-            <button className="md:hidden p-2 rounded-lg text-navy"
-              onClick={() => setMobileOpen(!mobileOpen)}>
-              {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            <button
+              className="md:hidden p-2 rounded-lg text-navy"
+              onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            >
+              {mobileOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -205,9 +208,9 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
         )}
       </nav>
 
-      <div className="pt-16">
+      <main className="pt-16">
         {children}
-      </div>
+      </main>
 
       {/* Footer */}
       <footer className="bg-navy text-white/70 py-10 mt-16">

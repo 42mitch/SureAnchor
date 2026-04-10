@@ -1,3 +1,4 @@
+using Backend.Data;
 using Backend.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -17,6 +18,24 @@ public class ProfileController : ControllerBase
         _userManager = userManager;
     }
 
+    // ── GET /api/profile ──────────────────────────────────────────────────────
+    [HttpGet]
+    public async Task<IActionResult> GetProfile()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
+
+        string? country = null;
+        if (user.SupporterId != null)
+        {
+            var db = HttpContext.RequestServices.GetRequiredService<Backend.Data.ApplicationDbContext>();
+            var supporter = await db.Supporters.FindAsync(user.SupporterId);
+            country = supporter?.Country;
+        }
+
+        return Ok(new { country });
+    }
+
     // ── PATCH /api/profile/display-name ───────────────────────────────────────
     [HttpPatch("display-name")]
     public async Task<IActionResult> UpdateDisplayName([FromBody] ProfileDisplayNameDto dto)
@@ -32,7 +51,23 @@ public class ProfileController : ControllerBase
         return NoContent();
     }
 
-    // ── POST /api/profile/change-password ─────────────────────────────────────
+    // ── PATCH /api/profile/country ────────────────────────────────────────────
+    [HttpPatch("country")]
+    public async Task<IActionResult> UpdateCountry([FromBody] ProfileCountryDto dto)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
+
+        if (user.SupporterId == null) return BadRequest(new { message = "No supporter record found." });
+
+        var db = HttpContext.RequestServices.GetRequiredService<Backend.Data.ApplicationDbContext>();
+        var supporter = await db.Supporters.FindAsync(user.SupporterId);
+        if (supporter == null) return NotFound();
+
+        supporter.Country = string.IsNullOrWhiteSpace(dto.Country) ? null : dto.Country.Trim();
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ProfileChangePasswordDto dto)
     {
@@ -56,3 +91,4 @@ public class ProfileController : ControllerBase
 
 public record ProfileDisplayNameDto(string DisplayName);
 public record ProfileChangePasswordDto(string CurrentPassword, string NewPassword);
+public record ProfileCountryDto(string? Country);

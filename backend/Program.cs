@@ -1,5 +1,6 @@
 using Backend.Data;
 using Backend.Models;
+using Backend.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
+builder.Services.AddSingleton<Backend.Services.EmailService>();
 
 // Named HTTP client used by MLController to call the Python ML microservice.
 // Set MlService:BaseUrl in appsettings.json (local) or Azure App Service config (prod).

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { HeartHandshake, TrendingUp, Clock, CalendarCheck, Heart, X } from 'lucide-react';
+import { HeartHandshake, TrendingUp, Clock, CalendarCheck, Heart, X, Globe } from 'lucide-react';
 import PublicLayout from '../layouts/PublicLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
@@ -8,6 +8,8 @@ import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 import { CurrencyDisplay, CurrencyDisplayDetailed } from '../components/CurrencyDisplay';
 import { phpToUsd } from '../utils/currency';
+import { COUNTRIES } from '../utils/countries';
+import UnconfirmedEmailBanner from '../components/UnconfirmedEmailBanner';
 
 interface Donation {
   donationId: number;
@@ -46,6 +48,11 @@ export default function DonorPortalPage() {
   const [impact, setImpact] = useState<ImpactAllocation[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Welcome modal for Google OAuth users with no country set
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeCountry, setWelcomeCountry] = useState('');
+  const [savingCountry, setSavingCountry] = useState(false);
+
   const [showDonate, setShowDonate] = useState(false);
   const [donateAmount, setDonateAmount] = useState('');
   const [donateCampaign, setDonateCampaign] = useState('General Donation');
@@ -65,7 +72,24 @@ export default function DonorPortalPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+    // Check if country is missing — show welcome modal if so
+    apiFetch('/api/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!data?.country) setShowWelcome(true); })
+      .catch(() => {});
+  }, []);
+
+  async function handleSaveCountry() {
+    setSavingCountry(true);
+    await apiFetch('/api/profile/country', {
+      method: 'PATCH',
+      body: JSON.stringify({ country: welcomeCountry || null }),
+    });
+    setSavingCountry(false);
+    setShowWelcome(false);
+  }
 
   async function handleDonate(e: React.FormEvent) {
     e.preventDefault();
@@ -135,24 +159,12 @@ export default function DonorPortalPage() {
     return acc;
   }, {});
 
-  const [donTypeFilter, setDonTypeFilter] = useState('');
-  const [donCampaignFilter, setDonCampaignFilter] = useState('');
-
-  const filteredDonations = donations.filter(d => {
-    const matchType = !donTypeFilter || d.donationType === donTypeFilter;
-    const matchCampaign = !donCampaignFilter || (d.campaignName ?? '') === donCampaignFilter;
-    return matchType && matchCampaign;
-  });
-
-  const BASE_DONATION_TYPES = ['Monetary', 'InKind', 'Time', 'Skills', 'SocialMedia'];
-  const donTypeOptions = [...new Set([...BASE_DONATION_TYPES, ...donations.map(d => d.donationType).filter(Boolean)])].sort();
-  const donCampaignOptions = [...new Set(donations.map(d => d.campaignName).filter(Boolean))].sort() as string[];
-
-  const donPag    = useListPagination(filteredDonations, [donTypeFilter, donCampaignFilter, donations.length]);
+  const donPag    = useListPagination(donations, [donations.length]);
   const impactPag = useListPagination(impact,    [impact.length]);
 
   return (
     <PublicLayout>
+      {user && !user.emailConfirmed && <UnconfirmedEmailBanner />}
       {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">
@@ -220,20 +232,6 @@ export default function DonorPortalPage() {
                   Give Again
                 </button>
               </div>
-              {donations.length > 0 && (
-                <div className="px-6 py-3 border-b border-dark/8 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <select value={donTypeFilter} onChange={e => setDonTypeFilter(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
-                    <option value="">All Types</option>
-                    {donTypeOptions.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                  <select value={donCampaignFilter} onChange={e => setDonCampaignFilter(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
-                    <option value="">All Campaigns</option>
-                    {donCampaignOptions.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-              )}
               {donations.length === 0 ? (
                 <div className="px-6 py-16 text-center">
                   <HeartHandshake size={40} className="text-dark/20 mx-auto mb-3" />
@@ -247,8 +245,6 @@ export default function DonorPortalPage() {
                     Make Your First Donation
                   </button>
                 </div>
-              ) : filteredDonations.length === 0 ? (
-                <div className="px-6 py-10 text-center text-dark/40 text-sm">No donations match your filters.</div>
               ) : (
                 <>
                   <div className="overflow-x-auto">
@@ -353,6 +349,49 @@ export default function DonorPortalPage() {
           </>
         )}
       </div>
+
+      {/* Welcome modal for Google OAuth users */}
+      {showWelcome && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm animate-fade-in overflow-hidden">
+            <div className="bg-gradient-to-r from-navy to-teal-dark px-6 py-5 text-white">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-xl font-bold">Welcome to SureAnchor!</h2>
+                <button onClick={() => setShowWelcome(false)} className="text-white/60 hover:text-white">
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-white/70 text-sm mt-1">
+                {user?.displayName ? `Great to have you, ${user.displayName.split(' ')[0]}.` : 'Great to have you.'} One quick thing:
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-dark mb-2 flex items-center gap-2">
+                  <Globe size={14} className="text-dark/40" /> Where are you joining us from?
+                </label>
+                <select
+                  value={welcomeCountry} onChange={e => setWelcomeCountry(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
+                >
+                  <option value="">Select your country…</option>
+                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowWelcome(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
+                  Skip
+                </button>
+                <button onClick={handleSaveCountry} disabled={savingCountry || !welcomeCountry}
+                  className="flex-1 py-2.5 rounded-xl bg-teal text-white text-sm font-semibold hover:bg-teal-dark transition-colors disabled:opacity-50">
+                  {savingCountry ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Donate Modal */}
       {showDonate && (

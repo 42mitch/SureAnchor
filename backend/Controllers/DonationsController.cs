@@ -1,5 +1,7 @@
 using Backend.Data;
 using Backend.Models;
+using Backend.Services;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -32,11 +34,13 @@ public class DonationsController : ControllerBase
 
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly EmailService _email;
 
-    public DonationsController(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
+    public DonationsController(ApplicationDbContext db, UserManager<ApplicationUser> userManager, EmailService email)
     {
         _db = db;
         _userManager = userManager;
+        _email = email;
     }
 
     // ── GET /api/donations ────────────────────────────────────────────────────
@@ -236,6 +240,19 @@ public class DonationsController : ControllerBase
             };
             _db.Donations.Add(donation);
             await _db.SaveChangesAsync();
+
+            // Send confirmation email if donor's email is confirmed
+            if (appUser.EmailConfirmed && !string.IsNullOrWhiteSpace(appUser.Email))
+            {
+                var displayName = appUser.DisplayName ?? appUser.Email;
+                var campaignName = donation.CampaignName ?? "General Donation";
+                _ = Task.Run(async () =>
+                {
+                    try { await _email.SendDonationConfirmationAsync(appUser.Email, displayName, donation.Amount ?? 0, campaignName); }
+                    catch { }
+                });
+            }
+
             return Ok(new { donation.DonationId, message = "Thank you for your donation!" });
         }
         catch (Exception ex)
@@ -334,25 +351,22 @@ public record DonationDto(
     string? Notes
 );
 
-// Note: data annotation attributes on record primary constructor parameters
-// are not supported in .NET 10 and cause 500 errors. Validation is handled
-// on the frontend and via the TryParseDonationDate helper instead.
 public record DonorGiveDto(
-    decimal Amount,
+    [Range(typeof(decimal), "0.01", "1000000000")] decimal Amount,
     string? CampaignName,
     string? Notes
 );
 
 public record DonationWriteDto(
-    int SupporterId,
-    string DonationType,
-    string DonationDate,
+    [Range(1, int.MaxValue)] int SupporterId,
+    [Required] string DonationType,
+    [Required] string DonationDate,
     bool IsRecurring,
     string? CampaignName,
     string? ChannelSource,
     string? CurrencyCode,
-    decimal? Amount,
-    decimal? EstimatedValue,
+    [Range(typeof(decimal), "0", "1000000000")] decimal? Amount,
+    [Range(typeof(decimal), "0", "1000000000")] decimal? EstimatedValue,
     string? ImpactUnit,
     string? Notes
 );

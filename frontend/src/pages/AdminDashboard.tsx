@@ -4,7 +4,7 @@ import {
   Users, HeartHandshake, Home, ChevronDown, ChevronUp,
   UserPlus, Heart, Calendar, Activity, AlertTriangle,
   Cpu, Megaphone, Target, Brain, TrendingDown,
-  Trophy, BarChart2
+  Trophy, BarChart2, Play, RefreshCw, CheckCircle
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
-import { formatCurrency, formatUsdK, phpToUsd } from '../utils/currency';
+import { formatCurrency, formatUsdK, phpToUsd, formatSafehouseName } from '../utils/currency';
 import { CurrencyDisplay } from '../components/CurrencyDisplay';
 import { useAuth } from '../context/AuthContext';
 
@@ -32,21 +32,75 @@ interface CampaignScore {
   campaign_name: string;
   month_label: string;
   high_performance_probability: number;
+  /** Model output + deterministic scenario jitter; preferred for dashboard display */
+  simulated_month_success_probability?: number;
   is_high_performing: boolean;
   total_value_php: number;
   total_donations: number;
   rank: number;
 }
+
+function campaignMonthSuccessProb(c: CampaignScore): number {
+  return c.simulated_month_success_probability ?? c.high_performance_probability;
+}
 interface CampaignResult { available: boolean; scorecard?: CampaignScore[]; reason?: string; }
 
-interface SafehousePrediction {
-  safehouse_id: number;
-  safehouse_name: string;
-  predicted_education_progress: number;
-  current_education_progress: number;
+interface SafehouseImpactItem {
+  safehouseId: number;
+  safehouseName: string;
+  city: string;
+  activeResidents: number;
+  totalFunding: number;
+  currentEducationProgress: number;
+  predictedEducationProgress: number;
   delta: number;
+  trend: string;
+  pctEducation: number;
+  pctWellbeing: number;
+  pctOperations: number;
+  pctTransport: number;
+  pctMaintenance: number;
+  pctOutreach: number;
 }
-interface SafehouseResult { available: boolean; predictions?: SafehousePrediction[]; reason?: string; }
+interface SafehouseResult {
+  available: boolean;
+  mlAvailable?: boolean;
+  safehouses?: SafehouseImpactItem[];
+  reason?: string;
+}
+interface SafehouseSimResult {
+  available: boolean;
+  projectedEducationProgress?: number;
+  currentEducationProgress?: number;
+  delta?: number;
+  confidence?: string;
+  recommendation?: string;
+  reason?: string;
+}
+
+type AllocKey = 'education' | 'wellbeing' | 'operations' | 'transport' | 'maintenance' | 'outreach';
+type AllocState = Record<AllocKey, number>;
+
+interface SocialPlatformStat {
+  platform: string;
+  postCount: number;
+  avgEngagementRate: number;
+  totalReach: number;
+  totalDonationReferrals: number;
+  estimatedDonationValuePhp: number;
+}
+interface SocialContentStat {
+  postType: string;
+  postCount: number;
+  avgEngagementRate: number;
+  totalDonationReferrals: number;
+}
+interface SocialOverview {
+  available: boolean;
+  reason?: string;
+  byPlatform?: SocialPlatformStat[];
+  byContentType?: SocialContentStat[];
+}
 
 interface ResidentListDto {
   residentId: number;
@@ -123,6 +177,72 @@ const PLATFORM_COLORS: Record<string, string> = {
 // Format currency showing USD (PHP)
 const fmt = (n: number) => formatCurrency(n);
 
+// ─── Safehouse simulator constants ────────────────────────────────────────────
+
+const ALLOC_LABELS: Record<AllocKey, string> = {
+  education:   'Education',
+  wellbeing:   'Wellbeing & Health',
+  operations:  'Operations & Shelter',
+  transport:   'Transport',
+  maintenance: 'Maintenance',
+  outreach:    'Outreach',
+};
+
+const ALLOC_COLORS: Record<AllocKey, string> = {
+  education:   '#0d9488',
+  wellbeing:   '#6366f1',
+  operations:  '#f59e0b',
+  transport:   '#10b981',
+  maintenance: '#8b5cf6',
+  outreach:    '#ec4899',
+};
+
+const SIM_TEMPLATES = [
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    alloc: { education: 30, wellbeing: 30, operations: 25, transport: 5, maintenance: 5, outreach: 5 } as AllocState,
+  },
+  {
+    id: 'education',
+    label: 'Education Focus',
+    alloc: { education: 50, wellbeing: 20, operations: 18, transport: 4, maintenance: 4, outreach: 4 } as AllocState,
+  },
+  {
+    id: 'wellbeing',
+    label: 'Wellbeing Focus',
+    alloc: { education: 22, wellbeing: 48, operations: 18, transport: 4, maintenance: 4, outreach: 4 } as AllocState,
+  },
+];
+
+const DEFAULT_ALLOC: AllocState = { education: 35, wellbeing: 28, operations: 22, transport: 5, maintenance: 5, outreach: 5 };
+
+function adjustAlloc(alloc: AllocState, field: AllocKey, newVal: number): AllocState {
+  const clamped = Math.min(100, Math.max(0, newVal));
+  const remaining = Math.round((100 - clamped) * 10) / 10;
+  const others = (Object.keys(alloc) as AllocKey[]).filter(k => k !== field);
+  const othersSum = others.reduce((s, k) => s + alloc[k], 0);
+  const next: AllocState = { ...alloc, [field]: clamped };
+  if (othersSum === 0) {
+    const per = Math.round((remaining / others.length) * 10) / 10;
+    others.forEach(k => { next[k] = per; });
+  } else {
+    const scale = remaining / othersSum;
+    others.forEach(k => { next[k] = Math.round(alloc[k] * scale * 10) / 10; });
+    const drift = Math.round((100 - (Object.values(next) as number[]).reduce((s, v) => s + v, 0)) * 10) / 10;
+    if (drift !== 0) {
+      const largest = [...others].sort((a, b) => next[b] - next[a])[0];
+      next[largest] = Math.round((next[largest] + drift) * 10) / 10;
+    }
+  }
+  return next;
+}
+
+function allocSum(a: AllocState): number {
+  return Math.round((Object.values(a) as number[]).reduce((s, v) => s + v, 0) * 10) / 10;
+}
+
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Section({
@@ -187,12 +307,21 @@ export default function AdminDashboard() {
   const [churnResult, setChurnResult] = useState<ChurnResult | null>(null);
   const [campaignResult, setCampaignResult] = useState<CampaignResult | null>(null);
   const [safehouseResult, setSafehouseResult] = useState<SafehouseResult | null>(null);
+  const [socialOverview, setSocialOverview] = useState<SocialOverview | null>(null);
   const [safehouses, setSafehouses] = useState<SafehouseDto[]>([]);
   const [upcomingConferences, setUpcomingConferences] = useState<UpcomingConferenceDto[]>([]);
   const [loadingResidents, setLoadingResidents] = useState(true);
   const [loadingDonations, setLoadingDonations] = useState(true);
   const [loadingSafehouses, setLoadingSafehouses] = useState(true);
   const [loadingConferences, setLoadingConferences] = useState(true);
+
+  // Allocation simulator state
+  const [simSelectedId, setSimSelectedId]         = useState<number | ''>('');
+  const [simBudget, setSimBudget]                 = useState(500000);
+  const [simAlloc, setSimAlloc]                   = useState<AllocState>(DEFAULT_ALLOC);
+  const [simResult, setSimResult]                 = useState<SafehouseSimResult | null>(null);
+  const [simLoading, setSimLoading]               = useState(false);
+  const [simActiveTemplate, setSimActiveTemplate] = useState<string | null>(null);
 
   const fetchResidents = useCallback(async () => {
     try {
@@ -249,11 +378,86 @@ export default function AdminDashboard() {
       .then(setCampaignResult)
       .catch(() => setCampaignResult({ available: false, reason: 'ML service unavailable' }));
 
-    apiFetch('/api/ml/safehouse-resources')
+    apiFetch('/api/ml/safehouse-funding-impact')
       .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
-      .then(setSafehouseResult)
+      .then((data: SafehouseResult) => {
+        setSafehouseResult(data);
+        // Pre-select the first safehouse in the simulator
+        if (data.safehouses && data.safehouses.length > 0) {
+          const sh = data.safehouses[0];
+          setSimSelectedId(sh.safehouseId);
+          setSimBudget(sh.totalFunding || 500000);
+          setSimAlloc({
+            education:   sh.pctEducation,
+            wellbeing:   sh.pctWellbeing,
+            operations:  sh.pctOperations,
+            transport:   sh.pctTransport,
+            maintenance: sh.pctMaintenance,
+            outreach:    sh.pctOutreach,
+          });
+        }
+      })
       .catch(() => setSafehouseResult({ available: false, reason: 'ML service unavailable' }));
+
+    apiFetch('/api/social-analytics')
+      .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
+      .then(setSocialOverview)
+      .catch(() => setSocialOverview({ available: false, reason: 'Could not load social data' }));
   }, []);
+
+  // ── Simulator helpers ───────────────────────────────────────────────────────
+
+  function onSelectSimSafehouse(id: number) {
+    setSimSelectedId(id);
+    setSimResult(null);
+    setSimActiveTemplate(null);
+    const sh = safehouseResult?.safehouses?.find(s => s.safehouseId === id);
+    if (sh) {
+      setSimBudget(sh.totalFunding || 500000);
+      setSimAlloc({
+        education:   sh.pctEducation,
+        wellbeing:   sh.pctWellbeing,
+        operations:  sh.pctOperations,
+        transport:   sh.pctTransport,
+        maintenance: sh.pctMaintenance,
+        outreach:    sh.pctOutreach,
+      });
+    }
+  }
+
+  function applySimTemplate(t: typeof SIM_TEMPLATES[0]) {
+    setSimAlloc(t.alloc);
+    setSimActiveTemplate(t.id);
+    setSimResult(null);
+  }
+
+  const runSimulation = useCallback(async () => {
+    if (!simSelectedId) return;
+    if (Math.abs(allocSum(simAlloc) - 100) > 0.5) return;
+    setSimLoading(true);
+    setSimResult(null);
+    try {
+      const res = await apiFetch('/api/ml/safehouse-simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          safehouseId:    simSelectedId,
+          totalBudget:    simBudget,
+          pctEducation:   simAlloc.education,
+          pctWellbeing:   simAlloc.wellbeing,
+          pctOperations:  simAlloc.operations,
+          pctTransport:   simAlloc.transport,
+          pctMaintenance: simAlloc.maintenance,
+          pctOutreach:    simAlloc.outreach,
+        }),
+      });
+      setSimResult(res.ok ? await res.json() : { available: false, reason: 'Request failed' });
+    } catch {
+      setSimResult({ available: false, reason: 'ML service unavailable' });
+    } finally {
+      setSimLoading(false);
+    }
+  }, [simSelectedId, simBudget, simAlloc]);
 
   // ── Derived: Residents ──────────────────────────────────────────────────────
   const activeResidents = residents.filter(r => r.status === 'Active');
@@ -332,9 +536,10 @@ export default function AdminDashboard() {
     ...recentAdmissions.slice(0, 2).map(r => ({
       id: `res-${r.residentId}`,
       icon: UserPlus,
-      text: `New resident admitted to ${r.safehouse}`,
+      text: `New resident admitted to ${formatSafehouseName(r.safehouse)}`,
       sub: `${r.caseNo} · ${r.category} · Risk: ${r.risk}`,
       date: r.dateAdmitted!,
+      linkTo: `/admin/resident/${r.residentId}`,
     })),
     ...recentDonations.map(d => ({
       id: `don-${d.donationId}`,
@@ -342,6 +547,7 @@ export default function AdminDashboard() {
       text: `${d.donationType} donation received`,
       sub: `${d.donorName} · via ${d.channelSource || 'Direct'} · ${d.amount ? formatUsdK(phpToUsd(Number(d.amount))) : d.impactUnit}`,
       date: d.donationDate,
+      linkTo: `/admin/donors?supporterId=${d.supporterId}`,
     })),
   ]
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -382,24 +588,27 @@ export default function AdminDashboard() {
     },
   ];
 
-  // Social media insights — real aggregations from social_media_posts table.
-  // Replace with /api/social-posts/insights when that endpoint is built.
-  const socialPlatformData = [
-    { platform: 'Instagram', eng: 10.61 },
-    { platform: 'Twitter', eng: 10.43 },
-    { platform: 'TikTok', eng: 9.87 },
-    { platform: 'YouTube', eng: 9.86 },
-    { platform: 'LinkedIn', eng: 9.83 },
-    { platform: 'Facebook', eng: 9.39 },
-    { platform: 'WhatsApp', eng: 9.17 },
-  ];
-  const socialTopicData = [
-    { topic: 'Safehouse Life', referrals: 1910 },
-    { topic: 'Health', referrals: 1515 },
-    { topic: 'Education', referrals: 1294 },
-    { topic: 'Awareness', referrals: 1227 },
-    { topic: 'Reintegration', referrals: 1212 },
-  ];
+  // Social overview — derived from live socialOverview state
+  const socialPlatformChart = (socialOverview?.byPlatform ?? [])
+    .slice(0, 6)
+    .map(p => ({ platform: p.platform, referrals: p.totalDonationReferrals, eng: p.avgEngagementRate }));
+
+  const socialContentChart = (socialOverview?.byContentType ?? [])
+    .slice(0, 5)
+    .map(c => ({
+      topic: c.postType.replace(/([A-Z])/g, ' $1').trim(),
+      referrals: c.totalDonationReferrals,
+    }));
+
+  const socialTotals = (socialOverview?.byPlatform ?? []).reduce(
+    (acc, p) => ({
+      posts: acc.posts + p.postCount,
+      reach: acc.reach + p.totalReach,
+      referrals: acc.referrals + p.totalDonationReferrals,
+      value: acc.value + p.estimatedDonationValuePhp,
+    }),
+    { posts: 0, reach: 0, referrals: 0, value: 0 },
+  );
 
   const loading = loadingResidents || loadingDonations || loadingSafehouses;
 
@@ -451,9 +660,16 @@ export default function AdminDashboard() {
             color="bg-navy/10 text-navy"
           />
           <StatCard
-            label="Supporter Health"
-            value={loadingDonations ? '—' : `${activeCount} active`}
-            sub={loadingDonations ? '' : `${atRiskCount} at risk of lapsing`}
+            label="Total Donors"
+            value={loadingDonations ? '—' : String(allSupporterIds.size)}
+            sub={loadingDonations ? '' : (() => {
+              if (churnResult?.available) {
+                const preds = churnResult.predictions ?? [];
+                const atRisk = preds.filter(p => p.risk_tier === 'Critical' || p.risk_tier === 'High').length;
+                return `${atRisk} critical/high risk (ML)`;
+              }
+              return `${atRiskCount} at risk of lapsing`;
+            })()}
             icon={Activity}
             color="bg-teal/10 text-teal"
           />
@@ -549,41 +765,184 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* ML: Safehouse Resource Impact */}
+            {/* ML: Funding Impact & Allocation Simulator */}
             {safehouseResult === null ? (
               <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
                 <Brain size={16} className="text-dark/30" />
-                <span className="text-xs text-dark/35 font-medium">Loading safehouse resource predictions…</span>
+                <span className="text-xs text-dark/35 font-medium">Loading safehouse predictions…</span>
               </div>
             ) : !safehouseResult.available ? (
-              <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-2 text-dark/40">
-                <Cpu size={16} strokeWidth={1.8} />
-                <span className="text-xs font-bold uppercase tracking-widest">ML Pipeline</span>
-                <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">Unavailable</span>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-navy/12 bg-navy/3 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Brain size={15} className="text-navy" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Safehouse Education Forecast</span>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3">
+                <Brain size={15} className="text-amber-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-amber-700">ML · Funding Impact — Unavailable</p>
+                  <p className="text-xs text-amber-600 mt-0.5 truncate">{safehouseResult.reason ?? 'ML service not connected.'}</p>
                 </div>
-                <div className="space-y-2">
-                  {(safehouseResult.predictions ?? []).map(sh => (
-                    <div key={sh.safehouse_id} className="flex items-center justify-between text-sm">
-                      <span className="text-dark/70 font-medium truncate mr-3">{sh.safehouse_name}</span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-dark/50 text-xs">{sh.current_education_progress}% →</span>
-                        <span className="font-bold text-navy">{sh.predicted_education_progress}%</span>
-                        <span className={`text-xs font-semibold ${sh.delta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          {sh.delta >= 0 ? '+' : ''}{sh.delta}
-                        </span>
+              </div>
+            ) : (() => {
+              const shList = safehouseResult.safehouses ?? [];
+              const simSumOk = Math.abs(allocSum(simAlloc) - 100) <= 0.5;
+              return (
+                <div className="rounded-2xl border border-navy/12 bg-navy/3 p-5 space-y-5">
+
+                  {/* Header */}
+                  <div className="flex items-center gap-2">
+                    <Brain size={14} className="text-navy" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Funding Impact &amp; Simulator</span>
+                  </div>
+
+                  {/* Template presets */}
+                  <div>
+                    <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Quick Templates</p>
+                    <div className="flex gap-2">
+                      {SIM_TEMPLATES.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => applySimTemplate(t)}
+                          className={`flex-1 text-xs py-1.5 px-2 rounded-lg border font-medium transition-all ${
+                            simActiveTemplate === t.id
+                              ? 'bg-teal/10 border-teal/30 text-teal'
+                              : 'border-dark/12 text-dark/55 hover:border-teal/25 hover:text-navy bg-white/60'
+                          }`}
+                        >
+                          {simActiveTemplate === t.id && <CheckCircle size={10} className="inline mr-1" />}
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Simulator */}
+                  <div>
+                    <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-3">Allocation Simulator</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+
+                      {/* Left: controls */}
+                      <div className="space-y-3">
+                        <select
+                          aria-label="Select safehouse"
+                          value={simSelectedId}
+                          onChange={e => onSelectSimSafehouse(Number(e.target.value))}
+                          className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2 text-xs text-dark focus:outline-none focus:ring-2 focus:ring-teal/30"
+                        >
+                          <option value="">— Select safehouse —</option>
+                          {shList.map(sh => (
+                            <option key={sh.safehouseId} value={sh.safehouseId}>
+                              {formatSafehouseName(sh.safehouseName)}
+                            </option>
+                          ))}
+                        </select>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-dark/45 whitespace-nowrap">Budget ₱</span>
+                          <input
+                            aria-label="Budget in Philippine Pesos"
+                            type="number" min={0} step={10000} value={simBudget}
+                            onChange={e => setSimBudget(Number(e.target.value))}
+                            className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2 text-xs text-dark focus:outline-none focus:ring-2 focus:ring-teal/30"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          {(Object.keys(ALLOC_LABELS) as AllocKey[]).map(key => (
+                            <div key={key}>
+                              <div className="flex justify-between mb-0.5">
+                                <span className="text-xs text-dark/50">{ALLOC_LABELS[key]}</span>
+                                <span className="text-xs font-bold tabular-nums" style={{ color: ALLOC_COLORS[key] }}>
+                                  {simAlloc[key].toFixed(0)}%
+                                </span>
+                              </div>
+                              <input
+                                aria-label={`${ALLOC_LABELS[key]} allocation percentage`}
+                                type="range" min={0} max={100} step={1} value={simAlloc[key]}
+                                onChange={e => {
+                                  setSimAlloc(adjustAlloc(simAlloc, key, Number(e.target.value)));
+                                  setSimActiveTemplate(null);
+                                  setSimResult(null);
+                                }}
+                                style={{ accentColor: ALLOC_COLORS[key] }}
+                                className="w-full h-1 rounded-full appearance-none cursor-pointer"
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${simSumOk ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                            {allocSum(simAlloc).toFixed(0)}% {simSumOk ? '✓' : '⚠'}
+                          </span>
+                          <button
+                            onClick={runSimulation}
+                            disabled={!simSelectedId || !simSumOk || simLoading}
+                            className="flex-1 btn-primary flex items-center justify-center gap-1.5 text-xs py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {simLoading
+                              ? <><RefreshCw size={12} className="animate-spin" /> Running…</>
+                              : <><Play size={12} /> Run Simulation</>}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right: result */}
+                      <div>
+                        {simResult === null && !simLoading && (
+                          <div className="h-full flex flex-col items-center justify-center text-center gap-2 py-6">
+                            <Brain size={24} className="text-dark/15" />
+                            <p className="text-xs text-dark/35">Adjust sliders and run to see projected outcomes</p>
+                          </div>
+                        )}
+                        {simLoading && (
+                          <div className="h-full flex flex-col items-center justify-center gap-2 py-6 animate-pulse">
+                            <Brain size={24} className="text-teal/40" />
+                            <p className="text-xs text-dark/35">Running model…</p>
+                          </div>
+                        )}
+                        {simResult && !simLoading && (
+                          !simResult.available ? (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                              <p className="text-xs font-semibold text-amber-700">Unavailable</p>
+                              <p className="text-xs text-amber-600 mt-1">{simResult.reason}</p>
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border border-teal/20 bg-white p-4 space-y-3 h-full">
+                              <div>
+                                <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide mb-1">Projected Progress</p>
+                                <div className="flex items-end gap-2">
+                                  <span className="font-display text-3xl font-bold text-teal tabular-nums">
+                                    {simResult.projectedEducationProgress?.toFixed(1)}<span className="text-lg">%</span>
+                                  </span>
+                                  <span className={`text-sm font-bold pb-0.5 ${(simResult.delta ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                    {(simResult.delta ?? 0) >= 0 ? '+' : ''}{simResult.delta?.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <p className="text-xs text-dark/35 mt-0.5">vs current {simResult.currentEducationProgress?.toFixed(1)}%</p>
+                              </div>
+                              <div className="h-2 bg-dark/8 rounded-full overflow-hidden relative">
+                                <div className="absolute h-full bg-dark/15 rounded-full"
+                                  style={{ width: `${simResult.currentEducationProgress ?? 0}%` }} />
+                                <div className={`absolute h-full rounded-full transition-all duration-700 ${(simResult.delta ?? 0) >= 0 ? 'bg-teal' : 'bg-red-400'}`}
+                                  style={{ width: `${simResult.projectedEducationProgress ?? 0}%` }} />
+                              </div>
+                              {simResult.confidence && (
+                                <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                  simResult.confidence === 'High'   ? 'bg-green-100 text-green-700' :
+                                  simResult.confidence === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                                                                      'bg-red-100 text-red-700'
+                                }`}>
+                                  {simResult.confidence} Confidence
+                                </span>
+                              )}
+                              <p className="text-xs text-dark/60 leading-relaxed">{simResult.recommendation}</p>
+                            </div>
+                          )
+                        )}
                       </div>
                     </div>
-                  ))}
+                  </div>
+
                 </div>
-                <p className="text-xs text-dark/35 mt-3">Predicted avg education progress next month based on current funding allocation.</p>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Safehouse occupancy */}
             <div>
@@ -658,156 +1017,267 @@ export default function AdminDashboard() {
         <Section title="Outreach" icon={Megaphone} accent="text-gold">
           <div className="space-y-6">
 
+            {/* Social Media Overview */}
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-widest text-dark/40 mb-3">
-                Social Media Insights <span className="normal-case font-normal text-dark/30">(aggregated from post history)</span>
-              </h3>
-              <div className="grid sm:grid-cols-3 gap-3 mb-5">
-                {[
-                  {
-                    label: 'Best Post Type',
-                    value: 'Impact Story',
-                    note: 'Drives 7,388 donation referrals — far ahead of any other type',
-                  },
-                  {
-                    label: 'Best Days to Post',
-                    value: 'Fri · Sat · Sun',
-                    note: 'Weekend posts average 10.4% engagement vs 9.5% on weekdays',
-                  },
-                  {
-                    label: 'Best Times',
-                    value: '7 PM · 8 PM',
-                    note: 'Evening posts reach up to 14.7% avg engagement rate',
-                  },
-                ].map(c => (
-                  <div key={c.label} className="rounded-2xl bg-navy/5 p-4">
-                    <div className="text-xs text-dark/40 mb-1 font-semibold uppercase tracking-wide">{c.label}</div>
-                    <div className="font-display text-lg font-bold text-navy">{c.value}</div>
-                    <div className="text-xs text-dark/50 mt-1">{c.note}</div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-dark/40">
+                  Social Media Overview
+                </h3>
+                <Link
+                  to="/admin/social-media"
+                  className="text-xs text-teal font-semibold hover:underline flex items-center gap-1"
+                >
+                  Full strategy &amp; guidance →
+                </Link>
               </div>
 
-              <div className="grid lg:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-xs text-dark/40 mb-3 font-semibold uppercase tracking-wide">
-                    Avg Engagement Rate by Platform
-                  </p>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={socialPlatformData} layout="vertical" barSize={10}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#00000008" />
-                      <XAxis type="number" domain={[8, 12]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} />
-                      <YAxis dataKey="platform" type="category" tick={{ fontSize: 11 }} width={72} />
-                      <Tooltip formatter={(v) => [`${(Number(v) || 0).toFixed(2)}%`, 'Engagement']} />
-                      <Bar dataKey="eng" radius={[0, 6, 6, 0]}>
-                        {socialPlatformData.map((entry, i) => (
-                          <Cell key={i} fill={PLATFORM_COLORS[entry.platform] || '#2D8F8A'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+              {/* Aggregate stat tiles */}
+              {socialOverview === null ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 animate-pulse">
+                  {[1,2,3,4].map(i => <div key={i} className="h-16 bg-dark/8 rounded-2xl" />)}
                 </div>
-
-                <div>
-                  <p className="text-xs text-dark/40 mb-3 font-semibold uppercase tracking-wide">
-                    Topics That Drive Donations
-                  </p>
-                  <div className="space-y-3">
-                    {socialTopicData.map((t, i) => {
-                      const max = socialTopicData[0].referrals;
-                      const barColors = ['#2D8F8A', '#1B3A5C', '#D4A843', '#ea580c', '#16a34a'];
-                      return (
-                        <div key={t.topic}>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-dark/60 font-medium">{t.topic}</span>
-                            <span className="font-bold text-dark">{t.referrals.toLocaleString()} referrals</span>
-                          </div>
-                          <div className="h-1.5 bg-dark/8 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-700"
-                              style={{ width: `${(t.referrals / max) * 100}%`, backgroundColor: barColors[i] }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="text-xs text-dark/30 mt-3 italic">
-                    💡 Safehouse Life &amp; Health posts consistently lead to donations — not just likes.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-4">
-              {/* ML: Campaign Strategy Ranker */}
-              {campaignResult === null ? (
-                <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
-                  <Brain size={16} className="text-dark/30" />
-                  <span className="text-xs text-dark/35 font-medium">Loading campaign rankings…</span>
-                </div>
-              ) : !campaignResult.available ? (
-                <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-2 text-dark/40">
-                  <Cpu size={16} strokeWidth={1.8} />
-                  <span className="text-xs font-bold uppercase tracking-widest">ML · Campaign Ranker</span>
-                  <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">Unavailable</span>
-                </div>
+              ) : !socialOverview.available ? (
+                <p className="text-xs text-dark/40 mb-5">{socialOverview.reason}</p>
               ) : (
-                <div className="rounded-2xl border border-gold/20 bg-gold/4 p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Trophy size={15} className="text-gold" />
-                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Campaign Ranker</span>
-                  </div>
-                  {(campaignResult.scorecard ?? []).length === 0 ? (
-                    <p className="text-xs text-dark/40">No campaign data available yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(campaignResult.scorecard ?? []).slice(0, 5).map(c => (
-                        <div key={`${c.campaign_name}-${c.month_label}`} className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-dark/30 w-4 text-right flex-shrink-0">#{c.rank}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-dark truncate">{c.campaign_name}</p>
-                            <p className="text-xs text-dark/40">{c.month_label}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <div className="w-12 h-1.5 bg-dark/8 rounded-full overflow-hidden">
-                              <div className="h-full bg-gold rounded-full" style={{ width: `${c.high_performance_probability * 100}%` }} />
-                            </div>
-                            <span className="text-xs font-bold text-gold">{Math.round(c.high_performance_probability * 100)}%</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-xs text-dark/35 mt-3">Campaigns ranked by predicted high-performance probability.</p>
-                </div>
-              )}
-
-              {/* Social Media Optimizer — static insights (model requires live post input) */}
-              <div className="rounded-2xl border border-teal/20 bg-teal/4 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <BarChart2 size={15} className="text-teal" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Post Impact Model</span>
-                  <span className="ml-auto text-xs bg-teal/15 text-teal px-2 py-0.5 rounded-full font-semibold">Active</span>
-                </div>
-                <div className="space-y-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   {[
-                    { label: 'Best post type', value: 'Impact Story', note: 'Highest referral yield' },
-                    { label: 'Best platforms', value: 'Instagram · Twitter', note: '10.6% avg engagement' },
-                    { label: 'Best time', value: '7–9 PM weekends', note: 'Peak donation referrals' },
-                  ].map(r => (
-                    <div key={r.label} className="flex items-start justify-between gap-2">
-                      <span className="text-xs text-dark/45 font-medium flex-shrink-0">{r.label}</span>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-navy block">{r.value}</span>
-                        <span className="text-xs text-dark/35">{r.note}</span>
-                      </div>
+                    { label: 'Total Posts', value: socialTotals.posts.toLocaleString() },
+                    { label: 'Total Reach', value: socialTotals.reach >= 1000
+                        ? `${(socialTotals.reach / 1000).toFixed(1)}K`
+                        : socialTotals.reach.toLocaleString() },
+                    { label: 'Donation Referrals', value: socialTotals.referrals.toLocaleString() },
+                    { label: 'Est. Value from Social', value: socialTotals.value > 0
+                        ? `₱${socialTotals.value >= 1000
+                            ? `${(socialTotals.value / 1000).toFixed(1)}K`
+                            : socialTotals.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                        : '—' },
+                  ].map(t => (
+                    <div key={t.label} className="rounded-2xl bg-navy/5 p-3 text-center">
+                      <div className="font-display text-xl font-bold text-navy">{t.value}</div>
+                      <div className="text-xs text-dark/45 mt-0.5 font-medium">{t.label}</div>
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-dark/35 mt-3">Live prediction per post available via the social media post entry form.</p>
-              </div>
+              )}
+
+              {/* Charts */}
+              {socialOverview?.available && (
+                <div className="grid lg:grid-cols-2 gap-6">
+                  {/* Donation referrals by platform */}
+                  <div>
+                    <p className="text-xs text-dark/40 mb-3 font-semibold uppercase tracking-wide">
+                      Donation Referrals by Platform
+                    </p>
+                    <ResponsiveContainer width="100%" height={190}>
+                      <BarChart data={socialPlatformChart} layout="vertical" barSize={10}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#00000008" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} />
+                        <YAxis dataKey="platform" type="category" tick={{ fontSize: 11 }} width={72} />
+                        <Tooltip formatter={(v) => [`${(Number(v) || 0).toLocaleString()}`, 'Referrals']} />
+                        <Bar dataKey="referrals" radius={[0, 6, 6, 0]}>
+                          {socialPlatformChart.map((entry, i) => (
+                            <Cell key={i} fill={PLATFORM_COLORS[entry.platform] || '#2D8F8A'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Donation referrals by content type */}
+                  <div>
+                    <p className="text-xs text-dark/40 mb-3 font-semibold uppercase tracking-wide">
+                      Donation Referrals by Content Type
+                    </p>
+                    <div className="space-y-2.5 mt-1">
+                      {socialContentChart.map((t, i) => {
+                        const max = socialContentChart[0]?.referrals || 1;
+                        const barColors = ['#2D8F8A', '#1B3A5C', '#D4A843', '#ea580c', '#16a34a'];
+                        return (
+                          <div key={t.topic}>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-dark/60 font-medium">{t.topic}</span>
+                              <span className="font-bold text-dark">{t.referrals.toLocaleString()}</span>
+                            </div>
+                            <div className="h-1.5 bg-dark/8 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-700"
+                                style={{ width: `${(t.referrals / max) * 100}%`, backgroundColor: barColors[i] }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* ML · Best month to run campaigns */}
+            <div className="grid sm:grid-cols-2 gap-4">
+              {campaignResult === null ? (
+                <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
+                  <Brain size={16} className="text-dark/30" />
+                  <span className="text-xs text-dark/35 font-medium">Loading campaign month analysis…</span>
+                </div>
+              ) : !campaignResult.available ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex items-center gap-3">
+                  <Brain size={15} className="text-amber-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700">ML · Best Month to Launch — Unavailable</p>
+                    <p className="text-xs text-amber-600 mt-0.5">{campaignResult.reason ?? 'ML service not connected.'}</p>
+                  </div>
+                </div>
+              ) : (() => {
+                const MONTH_ABBREVS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const byMonth: Record<number, number[]> = {};
+                for (let m = 1; m <= 12; m++) byMonth[m] = [];
+                (campaignResult.scorecard ?? []).forEach(c => {
+                  const m = parseInt(c.month_label.split('-')[1], 10);
+                  if (m >= 1 && m <= 12) byMonth[m].push(campaignMonthSuccessProb(c));
+                });
+                const monthData = Array.from({ length: 12 }, (_, i) => {
+                  const probs = byMonth[i + 1];
+                  const avg = probs.length > 0 ? probs.reduce((a, b) => a + b, 0) / probs.length : null;
+                  return { label: MONTH_ABBREVS[i], avg, count: probs.length };
+                });
+                const maxAvg = Math.max(...monthData.map(m => m.avg ?? 0));
+                function cellStyle(avg: number | null): React.CSSProperties {
+                  if (avg === null) return { backgroundColor: 'rgba(0,0,0,0.04)', color: 'rgba(0,0,0,0.2)' };
+                  const t = maxAvg > 0 ? avg / maxAvg : 0;
+                  const r = Math.round(254 + (217 - 254) * t);
+                  const g = Math.round(243 + (119 - 243) * t);
+                  const b = Math.round(199 + (6   - 199) * t);
+                  return {
+                    backgroundColor: `rgb(${r},${g},${b})`,
+                    color: t > 0.55 ? '#78350f' : '#92400e',
+                  };
+                }
+                const bestMonth = monthData.reduce((best, m) =>
+                  (m.avg ?? 0) > (best.avg ?? 0) ? m : best, monthData[0]);
+                return (
+                  <div className="rounded-2xl border border-gold/20 bg-gold/4 p-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Trophy size={15} className="text-gold" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Best Month to Launch</span>
+                    </div>
+                    <p className="text-xs text-dark/45 mb-4 leading-relaxed">
+                      Average predicted success probability per calendar month across all campaigns. Darker = historically stronger.
+                    </p>
+                    {(campaignResult.scorecard ?? []).length === 0 ? (
+                      <p className="text-xs text-dark/40">No campaign data available yet.</p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-6 gap-1.5 mb-3">
+                          {monthData.map(({ label, avg, count }) => (
+                            <div
+                              key={label}
+                              title={avg !== null ? `${label}: ${Math.round(avg * 100)}% avg across ${count} campaign-month${count !== 1 ? 's' : ''}` : `${label}: no data`}
+                              className="rounded-xl py-2 px-1 flex flex-col items-center gap-0.5 cursor-default transition-transform hover:scale-105"
+                              style={cellStyle(avg)}
+                            >
+                              <span className="text-[10px] font-bold">{label}</span>
+                              <span className="text-[11px] font-extrabold tabular-nums leading-none">
+                                {avg !== null ? `${Math.round(avg * 100)}%` : '—'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-[10px] text-dark/35">Lower</span>
+                          <div className="flex-1 h-1.5 rounded-full" style={{ background: 'linear-gradient(to right, rgb(254,243,199), rgb(217,119,6))' }} />
+                          <span className="text-[10px] text-dark/35">Higher</span>
+                        </div>
+                        {bestMonth.avg !== null && (
+                          <p className="text-xs text-dark/50 leading-relaxed">
+                            <span className="font-semibold text-amber-700">{bestMonth.label}</span> is historically your strongest launch month ({Math.round(bestMonth.avg * 100)}% avg).
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ML · Campaign comparison bar chart */}
+              {campaignResult === null ? (
+                <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
+                  <Brain size={16} className="text-dark/30" />
+                  <span className="text-xs text-dark/35 font-medium">Loading campaign comparison…</span>
+                </div>
+              ) : !campaignResult.available ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex items-center gap-3">
+                  <Brain size={15} className="text-amber-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700">ML · Campaign Comparison — Unavailable</p>
+                    <p className="text-xs text-amber-600 mt-0.5">{campaignResult.reason ?? 'ML service not connected.'}</p>
+                  </div>
+                </div>
+              ) : (() => {
+                // Roll up each campaign to a single average score
+                const campaignMap: Record<string, number[]> = {};
+                (campaignResult.scorecard ?? []).forEach(c => {
+                  if (!campaignMap[c.campaign_name]) campaignMap[c.campaign_name] = [];
+                  campaignMap[c.campaign_name].push(campaignMonthSuccessProb(c));
+                });
+                const campaigns = Object.entries(campaignMap)
+                  .map(([name, probs]) => ({
+                    name,
+                    avg: probs.reduce((a, b) => a + b, 0) / probs.length,
+                    months: probs.length,
+                  }))
+                  .sort((a, b) => b.avg - a.avg);
+                const maxAvg = campaigns[0]?.avg ?? 1;
+                function tierColor(avg: number) {
+                  if (avg >= 0.65) return { bar: '#d97706', label: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' };
+                  if (avg >= 0.45) return { bar: '#eab308', label: 'text-yellow-700', badge: 'bg-yellow-100 text-yellow-700' };
+                  return { bar: '#94a3b8', label: 'text-slate-500', badge: 'bg-slate-100 text-slate-500' };
+                }
+                return (
+                  <div className="rounded-2xl border border-gold/20 bg-gold/4 p-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <BarChart2 size={15} className="text-gold" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Campaign Comparison</span>
+                    </div>
+                    <p className="text-xs text-dark/45 mb-4 leading-relaxed">
+                      Average ML effectiveness score per campaign across all months run.
+                    </p>
+                    {campaigns.length === 0 ? (
+                      <p className="text-xs text-dark/40">No campaign data available yet.</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {campaigns.map(({ name, avg, months }) => {
+                          const { bar, label, badge } = tierColor(avg);
+                          const pct = maxAvg > 0 ? (avg / maxAvg) * 100 : 0;
+                          return (
+                            <div key={name}>
+                              <div className="flex items-center justify-between mb-1 gap-2">
+                                <span className="text-xs font-semibold text-dark truncate flex-1">{name}</span>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badge}`}>
+                                    {months}mo
+                                  </span>
+                                  <span className={`text-xs font-extrabold tabular-nums ${label}`}>
+                                    {Math.round(avg * 100)}%
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="h-2 bg-dark/8 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${pct}%`, backgroundColor: bar }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
           </div>
         </Section>
 
@@ -854,42 +1324,69 @@ export default function AdminDashboard() {
 
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-widest text-dark/40 mb-3">
-                  Supporter Health (90-Day Window)
+                  {churnResult?.available ? 'Supporter Churn Risk (ML)' : 'Supporter Health (90-Day Window)'}
                 </h3>
-                <div className="flex items-center gap-6">
-                  <ResponsiveContainer width={130} height={130}>
-                    <PieChart>
-                      <Pie
-                        data={donorStatusData}
-                        cx="50%" cy="50%"
-                        innerRadius={38} outerRadius={58}
-                        paddingAngle={3} dataKey="value"
-                      >
-                        {donorStatusData.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
+                {churnResult?.available ? (() => {
+                  const preds = churnResult.predictions ?? [];
+                  const mlTierData = [
+                    { name: 'Critical', value: preds.filter(p => p.risk_tier === 'Critical').length, color: '#dc2626' },
+                    { name: 'High',     value: preds.filter(p => p.risk_tier === 'High').length,     color: '#ea580c' },
+                    { name: 'Medium',   value: preds.filter(p => p.risk_tier === 'Medium').length,   color: '#eab308' },
+                    { name: 'Low',      value: preds.filter(p => p.risk_tier === 'Low').length,      color: '#22c55e' },
+                  ].filter(d => d.value > 0);
+                  return (
+                    <div className="flex items-center gap-6">
+                      <ResponsiveContainer width={130} height={130}>
+                        <PieChart>
+                          <Pie data={mlTierData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={3} dataKey="value">
+                            {mlTierData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                          </Pie>
+                          <Tooltip formatter={(v, n) => [`${v} supporters`, n]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="space-y-2 flex-1">
+                        {mlTierData.map(item => (
+                          <div key={item.name} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                              <span className="text-dark/60 text-xs font-medium">{item.name}</span>
+                            </div>
+                            <span className="font-bold text-dark text-xs">{item.value}</span>
+                          </div>
                         ))}
-                      </Pie>
-                      <Tooltip formatter={(v, n) => [`${v} supporters`, n]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="space-y-3 flex-1">
-                    {donorStatusData.map(item => (
-                      <div key={item.name} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                          <span className="text-dark/60 text-xs font-medium">{item.name}</span>
+                        <div className="text-xs text-dark/40 pt-0.5">{preds.length} supporters scored</div>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="flex items-center gap-6">
+                    <ResponsiveContainer width={130} height={130}>
+                      <PieChart>
+                        <Pie data={donorStatusData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={3} dataKey="value">
+                          {donorStatusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(v, n) => [`${v} supporters`, n]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-3 flex-1">
+                      {donorStatusData.map(item => (
+                        <div key={item.name} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="text-dark/60 text-xs font-medium">{item.name}</span>
+                          </div>
+                          <span className="font-bold text-dark text-xs">{item.value}</span>
                         </div>
-                        <span className="font-bold text-dark text-xs">{item.value}</span>
-                      </div>
-                    ))}
-                    {atRiskCount > 0 && (
-                      <div className="text-xs text-orange-600 bg-orange-50 rounded-xl p-2 flex gap-2 items-start">
-                        <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-                        <span>{atRiskCount} supporters haven't donated in 90+ days</span>
-                      </div>
-                    )}
+                      ))}
+                      {atRiskCount > 0 && (
+                        <div className="text-xs text-orange-600 bg-orange-50 rounded-xl p-2 flex gap-2 items-start">
+                          <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                          <span>{atRiskCount} supporters haven't donated in 90+ days</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -1055,18 +1552,22 @@ export default function AdminDashboard() {
               {activityItems.map(item => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.id} className="flex gap-4 items-start group">
+                  <Link
+                    key={item.id}
+                    to={item.linkTo}
+                    className="flex gap-4 items-start group rounded-xl -mx-2 px-2 py-1 -my-1 hover:bg-navy/5 transition-colors cursor-pointer text-left"
+                  >
                     <div className="w-9 h-9 rounded-xl bg-navy/6 flex items-center justify-center flex-shrink-0 group-hover:bg-teal/10 transition-colors">
                       <Icon size={16} className="text-navy/50 group-hover:text-teal transition-colors" strokeWidth={1.8} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-dark">{item.text}</p>
+                      <p className="text-sm font-medium text-dark group-hover:text-teal transition-colors">{item.text}</p>
                       <p className="text-xs text-dark/50 mt-0.5 truncate">{item.sub}</p>
                     </div>
                     <span className="text-xs text-dark/30 flex-shrink-0 pt-0.5">
                       {new Date(item.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
                     </span>
-                  </div>
+                  </Link>
                 );
               })}
             </div>

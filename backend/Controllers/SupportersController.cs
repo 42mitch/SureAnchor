@@ -1,6 +1,7 @@
 using Backend.Data;
 using Backend.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +13,13 @@ namespace Backend.Controllers;
 public class SupportersController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
-    public SupportersController(ApplicationDbContext db) => _db = db;
+    private readonly UserManager<ApplicationUser> _userManager;
+
+    public SupportersController(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
+    {
+        _db = db;
+        _userManager = userManager;
+    }
 
     // ── GET /api/supporters ───────────────────────────────────────────────────
     [HttpGet]
@@ -128,6 +135,14 @@ public class SupportersController : ControllerBase
     {
         var supporter = await _db.Supporters.FindAsync(id);
         if (supporter == null) return NotFound();
+
+        // If the donor has a linked login account (e.g. Google SSO), delete it
+        // first to avoid FK constraint violation on supporters.supporter_id.
+        var linkedUser = await _userManager.Users
+            .FirstOrDefaultAsync(u => u.SupporterId == id);
+        if (linkedUser != null)
+            await _userManager.DeleteAsync(linkedUser);
+
         _db.Supporters.Remove(supporter);
         await _db.SaveChangesAsync();
         return NoContent();
