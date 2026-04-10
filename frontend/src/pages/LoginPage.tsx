@@ -151,9 +151,6 @@ export default function LoginPage() {
               className="text-xs text-teal hover:underline">
               Forgot password?
             </button>
-            {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
-
-
 
             {/* Submit */}
             <button
@@ -171,6 +168,8 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+          
+          {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
 
           <div className="relative flex items-center gap-3 mt-6">
             <div className="flex-1 h-px bg-dark/10" />
