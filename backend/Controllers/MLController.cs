@@ -228,7 +228,7 @@ public class MLController : ControllerBase
         var ago60 = DateOnly.FromDateTime(today.AddDays(-60));
 
         var residents = await _db.Residents
-            .Where(r => r.Status == "Active")
+            .Where(r => r.CaseStatus == "Active")
             .ToListAsync();
 
         if (!residents.Any())
