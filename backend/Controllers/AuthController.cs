@@ -159,14 +159,11 @@ public class AuthController : ControllerBase
     {
         // Always return OK to avoid email enumeration
         var user = await _userManager.FindByEmailAsync(req.Email);
-        if (user != null && user.EmailConfirmed)
+        if (user != null)
         {
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            _ = Task.Run(async () =>
-            {
-                try { await _email.SendPasswordResetAsync(user.Email!, user.DisplayName ?? user.Email!, token); }
-                catch { }
-            });
+            try { await _email.SendPasswordResetAsync(user.Email!, user.DisplayName ?? user.Email!, token); }
+            catch { /* log in production */ }
         }
         return Ok(new { message = "If an account with that email exists, a reset link has been sent." });
     }
@@ -264,6 +261,26 @@ public class AuthController : ControllerBase
         if (!await _roleManager.RoleExistsAsync("Donor"))
             await _roleManager.CreateAsync(new IdentityRole("Donor"));
         await _userManager.AddToRoleAsync(user, "Donor");
+
+        // Create Supporter record so country and profile can be saved
+        var db     = HttpContext.RequestServices.GetRequiredService<Backend.Data.ApplicationDbContext>();
+        var nextId = (db.Supporters.Any() ? db.Supporters.Max(s => s.SupporterId) : 0) + 1;
+        var supporter = new Supporter
+        {
+            SupporterId        = nextId,
+            SupporterType      = "MonetaryDonor",
+            DisplayName        = user.DisplayName ?? user.Email ?? email,
+            Email              = user.Email,
+            Country            = null, // will be set via welcome modal
+            Status             = "Active",
+            CreatedAt          = DateTime.UtcNow,
+            AcquisitionChannel = "Website",
+        };
+        db.Supporters.Add(supporter);
+        await db.SaveChangesAsync();
+
+        user.SupporterId = supporter.SupporterId;
+        await _userManager.UpdateAsync(user);
 
         await _signInManager.SignInAsync(user, isPersistent: true);
         return Redirect($"{frontendUrl}/donor");
