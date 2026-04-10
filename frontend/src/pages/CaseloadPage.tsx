@@ -165,6 +165,7 @@ export default function CaseloadPage() {
               />
             </div>
             <select
+              aria-label="Filter by status"
               value={statusFilter}
               onChange={e => {
                 const v = e.target.value;
@@ -185,6 +186,7 @@ export default function CaseloadPage() {
               {STATUS_LEVELS.map(o => <option key={o}>{o}</option>)}
             </select>
             <select
+              aria-label="Filter by risk level"
               value={riskFilter}
               onChange={e => {
                 const v = e.target.value;
@@ -205,6 +207,7 @@ export default function CaseloadPage() {
               {RISK_LEVELS.map(o => <option key={o}>{o}</option>)}
             </select>
             <select
+              aria-label="Filter by safehouse"
               value={safehouseFilter}
               onChange={e => setSafehouseFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
@@ -213,6 +216,7 @@ export default function CaseloadPage() {
               {safehouseOptions.map(o => <option key={o}>{o}</option>)}
             </select>
             <select
+              aria-label="Filter by case category"
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
@@ -221,6 +225,7 @@ export default function CaseloadPage() {
               {categoryOptions.map(o => <option key={o}>{o}</option>)}
             </select>
             <select
+              aria-label="Filter by reintegration status"
               value={reintegrationFilter}
               onChange={e => setReintegrationFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
@@ -229,6 +234,7 @@ export default function CaseloadPage() {
               {reintegrationOptions.map(o => <option key={o}>{o}</option>)}
             </select>
             <select
+              aria-label="Filter by disability"
               value={disabilityFilter}
               onChange={e => setDisabilityFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
