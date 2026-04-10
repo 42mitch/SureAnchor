@@ -1088,60 +1088,91 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* Simulated campaign-month success (ML-backed) */}
+            {/* ML · Best month to run campaigns */}
             <div className="grid sm:grid-cols-2 gap-4">
               {campaignResult === null ? (
                 <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
                   <Brain size={16} className="text-dark/30" />
-                  <span className="text-xs text-dark/35 font-medium">Loading simulated month success…</span>
+                  <span className="text-xs text-dark/35 font-medium">Loading campaign month analysis…</span>
                 </div>
               ) : !campaignResult.available ? (
-                <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-2 text-dark/40">
-                  <Cpu size={16} strokeWidth={1.8} />
-                  <span className="text-xs font-bold uppercase tracking-widest">ML · Campaign month simulation</span>
-                  <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">Unavailable</span>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-gold/20 bg-gold/4 p-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Trophy size={15} className="text-gold" />
-                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Campaign month simulation</span>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex items-center gap-3">
+                  <Brain size={15} className="text-amber-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700">ML · Best Month to Launch — Unavailable</p>
+                    <p className="text-xs text-amber-600 mt-0.5">{campaignResult.reason ?? 'ML service not connected.'}</p>
                   </div>
-                  <p className="text-xs text-dark/45 mb-4 leading-relaxed">
-                    Likely success probability for each <span className="font-semibold text-dark/55">campaign × calendar month</span> (model + small fixed scenario draw).
-                  </p>
-                  {(campaignResult.scorecard ?? []).length === 0 ? (
-                    <p className="text-xs text-dark/40">No campaign data available yet.</p>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {(campaignResult.scorecard ?? []).slice(0, 5).map(c => {
-                        const p = campaignMonthSuccessProb(c);
-                        return (
-                          <div key={`${c.campaign_name}-${c.month_label}`} className="flex items-center gap-3">
-                            <span className="text-xs font-bold text-dark/30 w-4 text-right flex-shrink-0">#{c.rank}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-dark truncate">{c.campaign_name}</p>
-                              <p className="text-xs text-dark/40">{c.month_label}</p>
-                            </div>
-                            <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-14 h-1.5 bg-dark/8 rounded-full overflow-hidden">
-                                  <div className="h-full bg-gold rounded-full" style={{ width: `${p * 100}%` }} />
-                                </div>
-                                <span className="text-xs font-bold text-gold tabular-nums">{Math.round(p * 100)}%</span>
-                              </div>
-                              <span className="text-[10px] text-dark/35 uppercase tracking-wide">sim. month</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <p className="text-xs text-dark/35 mt-3 leading-relaxed">
-                    Ranked by simulated month success probability. For planning only—not a guarantee of results.
-                  </p>
                 </div>
-              )}
+              ) : (() => {
+                const MONTH_ABBREVS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const byMonth: Record<number, number[]> = {};
+                for (let m = 1; m <= 12; m++) byMonth[m] = [];
+                (campaignResult.scorecard ?? []).forEach(c => {
+                  const m = parseInt(c.month_label.split('-')[1], 10);
+                  if (m >= 1 && m <= 12) byMonth[m].push(campaignMonthSuccessProb(c));
+                });
+                const monthData = Array.from({ length: 12 }, (_, i) => {
+                  const probs = byMonth[i + 1];
+                  const avg = probs.length > 0 ? probs.reduce((a, b) => a + b, 0) / probs.length : null;
+                  return { label: MONTH_ABBREVS[i], avg, count: probs.length };
+                });
+                const maxAvg = Math.max(...monthData.map(m => m.avg ?? 0));
+                function cellStyle(avg: number | null): React.CSSProperties {
+                  if (avg === null) return { backgroundColor: 'rgba(0,0,0,0.04)', color: 'rgba(0,0,0,0.2)' };
+                  const t = maxAvg > 0 ? avg / maxAvg : 0;
+                  const r = Math.round(254 + (217 - 254) * t);
+                  const g = Math.round(243 + (119 - 243) * t);
+                  const b = Math.round(199 + (6   - 199) * t);
+                  return {
+                    backgroundColor: `rgb(${r},${g},${b})`,
+                    color: t > 0.55 ? '#78350f' : '#92400e',
+                  };
+                }
+                const bestMonth = monthData.reduce((best, m) =>
+                  (m.avg ?? 0) > (best.avg ?? 0) ? m : best, monthData[0]);
+                return (
+                  <div className="rounded-2xl border border-gold/20 bg-gold/4 p-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Trophy size={15} className="text-gold" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Best Month to Launch</span>
+                    </div>
+                    <p className="text-xs text-dark/45 mb-4 leading-relaxed">
+                      Average predicted success probability per calendar month across all campaigns. Darker = historically stronger.
+                    </p>
+                    {(campaignResult.scorecard ?? []).length === 0 ? (
+                      <p className="text-xs text-dark/40">No campaign data available yet.</p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-6 gap-1.5 mb-3">
+                          {monthData.map(({ label, avg, count }) => (
+                            <div
+                              key={label}
+                              title={avg !== null ? `${label}: ${Math.round(avg * 100)}% avg across ${count} campaign-month${count !== 1 ? 's' : ''}` : `${label}: no data`}
+                              className="rounded-xl py-2 px-1 flex flex-col items-center gap-0.5 cursor-default transition-transform hover:scale-105"
+                              style={cellStyle(avg)}
+                            >
+                              <span className="text-[10px] font-bold">{label}</span>
+                              <span className="text-[11px] font-extrabold tabular-nums leading-none">
+                                {avg !== null ? `${Math.round(avg * 100)}%` : '—'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-[10px] text-dark/35">Lower</span>
+                          <div className="flex-1 h-1.5 rounded-full" style={{ background: 'linear-gradient(to right, rgb(254,243,199), rgb(217,119,6))' }} />
+                          <span className="text-[10px] text-dark/35">Higher</span>
+                        </div>
+                        {bestMonth.avg !== null && (
+                          <p className="text-xs text-dark/50 leading-relaxed">
+                            <span className="font-semibold text-amber-700">{bestMonth.label}</span> is historically your strongest launch month ({Math.round(bestMonth.avg * 100)}% avg).
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Link to full Social Media Strategy page */}
               <Link
