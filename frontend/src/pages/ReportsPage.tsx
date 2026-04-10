@@ -13,6 +13,7 @@ import { apiFetch } from '../api';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 import { formatCurrencyDetailed, formatCurrencyAxis } from '../utils/currency';
+import DonationAllocationsSection from '../components/DonationAllocationsSection';
 
 // ─── API shape ────────────────────────────────────────────────────────────────
 
@@ -632,6 +633,17 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             )}
           </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* VII. DONATION ALLOCATIONS                                         */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        <section>
+          <SectionHeader
+            title="VII. Donation Allocations"
+            sub="How donations are distributed across safehouses and program areas"
+          />
+          <DonationAllocationsSection />
         </section>
 
       </div>
