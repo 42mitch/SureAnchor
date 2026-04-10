@@ -227,14 +227,6 @@ function EditSupporterModal({
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Status</label>
-                <select value={form.status} onChange={e => set('status', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
-                  <option>Active</option>
-                  <option>Inactive</option>
-                </select>
-              </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Acquisition Channel</label>
                 <select value={form.acquisitionChannel} onChange={e => set('acquisitionChannel', e.target.value)}
@@ -803,9 +795,18 @@ function DonorDetailModal({
                   {detail && (
                     <div className="flex items-center gap-2 mt-1">
                       {typeBadge(detail.supporterType)}
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${detail.status === 'Active' ? 'bg-green-400/20 text-green-200' : 'bg-white/20 text-white/60'}`}>
-                        {detail.status}
-                      </span>
+                      {churnLoading ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 text-white/40">—</span>
+                      ) : churnRisk?.available && churnRisk.risk_tier ? (
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          churnRisk.risk_tier === 'Critical' ? 'bg-red-400/30 text-red-100' :
+                          churnRisk.risk_tier === 'High'     ? 'bg-orange-400/30 text-orange-100' :
+                          churnRisk.risk_tier === 'Medium'   ? 'bg-yellow-400/30 text-yellow-100' :
+                                                               'bg-green-400/20 text-green-200'
+                        }`}>
+                          {churnRisk.risk_tier} Risk
+                        </span>
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -874,24 +875,6 @@ function DonorDetailModal({
 
             {/* Contact & Info */}
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="flex items-start gap-3 bg-cream/60 rounded-xl px-4 py-3 sm:col-span-2">
-                <div className="w-7 h-7 rounded-lg bg-navy/8 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <UserCircle size={13} className="text-navy" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide">Donor status</p>
-                  <span
-                    className={`inline-flex mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      detail.status === 'Active'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {detail.status}
-                  </span>
-                </div>
-              </div>
-
               <div className="flex items-start gap-3 bg-navy/5 rounded-xl px-4 py-3 sm:col-span-2 border border-navy/10">
                 <div className="w-7 h-7 rounded-lg bg-navy/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Brain size={13} className="text-navy" />
@@ -1215,13 +1198,6 @@ function AddSupporterModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Status</label>
-                <select value={form.status} onChange={e => set('status', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
-                  <option>Active</option><option>Inactive</option>
-                </select>
-              </div>
-              <div>
                 <label className="block text-xs font-semibold text-dark/50 uppercase tracking-wide mb-2">Acquisition Channel</label>
                 <select value={form.acquisitionChannel} onChange={e => set('acquisitionChannel', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
@@ -1294,12 +1270,17 @@ export default function DonorsPage() {
     apiFetch('/api/supporters').then(r => r.ok ? r.json() : []).then(setSupporters);
   }
 
+  // Build a fast lookup: supporterId → churn prediction
+  const churnMap = new Map(
+    (pageChurn?.predictions ?? []).map(p => [p.supporter_id, p])
+  );
+
   const filtered = supporters.filter(s => {
     const matchSearch = !search ||
       s.displayName.toLowerCase().includes(search.toLowerCase()) ||
       (s.email ?? '').toLowerCase().includes(search.toLowerCase());
     const matchType = !typeFilter || s.supporterType === typeFilter;
-    const matchStatus = !statusFilter || s.status === statusFilter;
+    const matchStatus = !statusFilter || (churnMap.get(s.supporterId)?.risk_tier ?? 'Low') === statusFilter;
     return matchSearch && matchType && matchStatus;
   });
 
@@ -1420,11 +1401,13 @@ export default function DonorsPage() {
               <option value="SocialMediaAdvocate">Social Media Advocate</option>
               <option value="PartnerOrganization">Partner Organization</option>
             </select>
-            <select aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            <select aria-label="Filter by churn risk" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
-              <option value="">Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
+              <option value="">Churn Risk</option>
+              <option value="Critical">Critical</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
             </select>
           </div>
         </div>
@@ -1443,7 +1426,7 @@ export default function DonorsPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-dark/8 bg-cream/70">
-                      {['Name', 'Type', 'Status', 'Total Contributed', 'Last Donation', 'Country', ''].map(h => (
+                      {['Name', 'Type', 'Churn Risk', 'Total Contributed', 'Last Donation', 'Country', ''].map(h => (
                         <th key={h} className="text-left text-xs font-semibold text-dark/40 uppercase tracking-wide px-5 py-3.5 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -1468,9 +1451,18 @@ export default function DonorsPage() {
                         </td>
                         <td className="px-5 py-3.5">{typeBadge(s.supporterType)}</td>
                         <td className="px-5 py-3.5">
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${s.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {s.status}
-                          </span>
+                          {pageChurn === null ? (
+                            <span className="text-xs text-dark/25 animate-pulse">—</span>
+                          ) : !pageChurn.available ? (
+                            <span className="text-xs text-dark/30 italic">No ML</span>
+                          ) : (() => {
+                            const tier = churnMap.get(s.supporterId)?.risk_tier ?? 'Low';
+                            return (
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${CHURN_TIER_BADGE[tier] ?? 'bg-green-100 text-green-700'}`}>
+                                {tier}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-5 py-3.5">
                           {s.totalDonated > 0
