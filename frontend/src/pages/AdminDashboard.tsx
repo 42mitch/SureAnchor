@@ -798,6 +798,7 @@ export default function AdminDashboard() {
                       {/* Left: controls */}
                       <div className="space-y-3">
                         <select
+                          aria-label="Select safehouse"
                           value={simSelectedId}
                           onChange={e => onSelectSimSafehouse(Number(e.target.value))}
                           className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2 text-xs text-dark focus:outline-none focus:ring-2 focus:ring-teal/30"
@@ -813,6 +814,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-dark/45 whitespace-nowrap">Budget ₱</span>
                           <input
+                            aria-label="Budget in Philippine Pesos"
                             type="number" min={0} step={10000} value={simBudget}
                             onChange={e => setSimBudget(Number(e.target.value))}
                             className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2 text-xs text-dark focus:outline-none focus:ring-2 focus:ring-teal/30"
@@ -829,6 +831,7 @@ export default function AdminDashboard() {
                                 </span>
                               </div>
                               <input
+                                aria-label={`${ALLOC_LABELS[key]} allocation percentage`}
                                 type="range" min={0} max={100} step={1} value={simAlloc[key]}
                                 onChange={e => {
                                   setSimAlloc(adjustAlloc(simAlloc, key, Number(e.target.value)));
