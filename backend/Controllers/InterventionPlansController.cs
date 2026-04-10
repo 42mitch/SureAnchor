@@ -14,6 +14,33 @@ public class InterventionPlansController : ControllerBase
     private readonly ApplicationDbContext _db;
     public InterventionPlansController(ApplicationDbContext db) => _db = db;
 
+    // ── GET /api/intervention-plans/upcoming-conferences ──────────────────────
+    [HttpGet("upcoming-conferences")]
+    public async Task<IActionResult> GetUpcomingConferences()
+    {
+        // Show conferences that have a scheduled date and are not yet completed/closed
+        // This includes both future conferences and recent past conferences that are still active
+        var conferences = await _db.InterventionPlans
+            .Include(p => p.Resident)
+            .Where(p => p.CaseConferenceDate.HasValue
+                     && p.Status != "Achieved"
+                     && p.Status != "Closed")
+            .OrderBy(p => p.CaseConferenceDate)
+            .Take(10)
+            .Select(p => new UpcomingConferenceDto(
+                p.PlanId,
+                p.ResidentId,
+                p.Resident.InternalCode,
+                p.PlanCategory,
+                p.PlanDescription,
+                p.CaseConferenceDate!.Value.ToString("yyyy-MM-dd"),
+                p.Status
+            ))
+            .ToListAsync();
+
+        return Ok(conferences);
+    }
+
     // ── GET /api/intervention-plans?residentId={id} ───────────────────────────
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int? residentId)
@@ -124,4 +151,14 @@ public record InterventionPlanWriteDto(
     string?  TargetDate,
     string   Status,
     string?  CaseConferenceDate
+);
+
+public record UpcomingConferenceDto(
+    int     PlanId,
+    int     ResidentId,
+    string  ResidentName,
+    string  PlanCategory,
+    string? PlanDescription,
+    string  CaseConferenceDate,
+    string  Status
 );

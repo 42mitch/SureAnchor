@@ -104,6 +104,77 @@ public class DonationsController : ControllerBase
         return Ok(allocations);
     }
 
+    // ── GET /api/donations/allocations ────────────────────────────────────────
+    // Admin/Staff: shows all donation allocations across safehouses and programs
+    [HttpGet("allocations")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> GetAllocations()
+    {
+        var allocations = await _db.DonationAllocations
+            .Include(a => a.Donation)
+                .ThenInclude(d => d.Supporter)
+            .Include(a => a.Safehouse)
+            .OrderByDescending(a => a.AllocationDate)
+            .Select(a => new AllocationDto(
+                a.AllocationId,
+                a.DonationId,
+                a.Donation.Supporter.DisplayName,
+                a.SafehouseId,
+                a.Safehouse.Name,
+                a.ProgramArea,
+                a.AmountAllocated,
+                a.AllocationDate.ToString("yyyy-MM-dd"),
+                a.AllocationNotes
+            ))
+            .ToListAsync();
+        return Ok(allocations);
+    }
+
+    // ── GET /api/donations/allocations/summary ────────────────────────────────
+    // Admin/Staff: summary of allocations by safehouse and program area
+    [HttpGet("allocations/summary")]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> GetAllocationsSummary()
+    {
+        // Group by safehouse
+        var bySafehouse = await _db.DonationAllocations
+            .Include(a => a.Safehouse)
+            .GroupBy(a => new { a.SafehouseId, a.Safehouse.Name })
+            .Select(g => new
+            {
+                SafehouseId = g.Key.SafehouseId,
+                SafehouseName = g.Key.Name,
+                TotalAllocated = g.Sum(a => a.AmountAllocated),
+                AllocationCount = g.Count()
+            })
+            .OrderByDescending(x => x.TotalAllocated)
+            .ToListAsync();
+
+        // Group by program area
+        var byProgramArea = await _db.DonationAllocations
+            .GroupBy(a => a.ProgramArea)
+            .Select(g => new
+            {
+                ProgramArea = g.Key,
+                TotalAllocated = g.Sum(a => a.AmountAllocated),
+                AllocationCount = g.Count()
+            })
+            .OrderByDescending(x => x.TotalAllocated)
+            .ToListAsync();
+
+        // Overall totals
+        var totalAllocated = await _db.DonationAllocations.SumAsync(a => a.AmountAllocated);
+        var totalAllocations = await _db.DonationAllocations.CountAsync();
+
+        return Ok(new
+        {
+            BySafehouse = bySafehouse,
+            ByProgramArea = byProgramArea,
+            TotalAllocated = totalAllocated,
+            TotalAllocations = totalAllocations
+        });
+    }
+
     // ── POST /api/donations/give ──────────────────────────────────────────────
     // Donor self-service: submit their own donation (creates Supporter if needed)
     [HttpPost("give")]
@@ -284,4 +355,16 @@ public record DonationWriteDto(
     decimal? EstimatedValue,
     string? ImpactUnit,
     string? Notes
+);
+
+public record AllocationDto(
+    int AllocationId,
+    int DonationId,
+    string DonorName,
+    int SafehouseId,
+    string SafehouseName,
+    string ProgramArea,
+    decimal AmountAllocated,
+    string AllocationDate,
+    string? AllocationNotes
 );

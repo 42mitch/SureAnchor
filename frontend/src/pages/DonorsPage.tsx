@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   HeartHandshake, Users, Sparkles, Plus, X, Trash2, Search,
-  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil
+  Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil, Target
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +11,7 @@ import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 import { CurrencyDisplay, CurrencyDisplayDetailed } from '../components/CurrencyDisplay';
+import DonationAllocationsSection from '../components/DonationAllocationsSection';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1058,6 +1059,7 @@ export default function DonorsPage() {
   const { user } = useAuth();
   const isAdmin = user?.roles.includes('Admin') ?? false;
 
+  const [activeTab, setActiveTab] = useState<'donors' | 'allocations'>('donors');
   const [supporters, setSupporters] = useState<Supporter[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -1105,41 +1107,74 @@ export default function DonorsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold text-navy">Donors & Contributions</h1>
-            <p className="text-dark/50 text-sm mt-1">Supporters and partner organizations</p>
+            <p className="text-dark/50 text-sm mt-1">Supporters, partner organizations, and donation allocations</p>
           </div>
-          <button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2 text-sm self-start sm:self-auto">
-            <Plus size={16} /> Add Supporter
-          </button>
+          {activeTab === 'donors' && (
+            <button onClick={() => setShowAddModal(true)} className="btn-primary flex items-center gap-2 text-sm self-start sm:self-auto">
+              <Plus size={16} /> Add Supporter
+            </button>
+          )}
         </div>
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { icon: Users,        label: 'Total Supporters', value: totalDonors.toString(),          color: 'text-navy', bg: 'bg-navy/8' },
-            { icon: Sparkles,     label: 'Active',           value: activeDonors.toString(),         color: 'text-teal', bg: 'bg-teal/10' },
-            { icon: HeartHandshake, label: 'Total Donated',  value: totalDonated, color: 'text-gold', bg: 'bg-gold/10', isCurrency: true },
-          ].map(({ icon: Icon, label, value, color, bg, isCurrency }) => (
-            <div key={label} className="card flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bg}`}>
-                <Icon size={22} className={color} strokeWidth={1.8} />
-              </div>
-              <div>
-                {isCurrency ? (
-                  <CurrencyDisplay
-                    php={value as number}
-                    usdClassName={`font-display text-2xl font-bold ${color}`}
-                    phpClassName="text-xs text-dark/30 font-normal"
-                  />
-                ) : (
-                  <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
-                )}
-                <div className="text-sm text-dark/55 font-medium">{label}</div>
-              </div>
+        {/* Tabs */}
+        <div className="card p-0 overflow-hidden">
+          <div className="flex border-b border-dark/8">
+            <button
+              onClick={() => setActiveTab('donors')}
+              className={`flex-1 px-6 py-4 font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'donors'
+                  ? 'bg-teal/5 text-teal border-b-2 border-teal'
+                  : 'text-dark/50 hover:text-dark hover:bg-cream/50'
+              }`}
+            >
+              <Users size={18} />
+              Donors & Supporters
+            </button>
+            <button
+              onClick={() => setActiveTab('allocations')}
+              className={`flex-1 px-6 py-4 font-semibold text-sm transition-colors flex items-center justify-center gap-2 ${
+                activeTab === 'allocations'
+                  ? 'bg-teal/5 text-teal border-b-2 border-teal'
+                  : 'text-dark/50 hover:text-dark hover:bg-cream/50'
+              }`}
+            >
+              <Target size={18} />
+              Donation Allocations
+            </button>
+          </div>
+        </div>
+
+        {/* Donors Tab Content */}
+        {activeTab === 'donors' && (
+          <>
+            {/* Summary cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                { icon: Users,        label: 'Total Supporters', value: totalDonors.toString(),          color: 'text-navy', bg: 'bg-navy/8' },
+                { icon: Sparkles,     label: 'Active',           value: activeDonors.toString(),         color: 'text-teal', bg: 'bg-teal/10' },
+                { icon: HeartHandshake, label: 'Total Donated',  value: totalDonated, color: 'text-gold', bg: 'bg-gold/10', isCurrency: true },
+              ].map(({ icon: Icon, label, value, color, bg, isCurrency }) => (
+                <div key={label} className="card flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bg}`}>
+                    <Icon size={22} className={color} strokeWidth={1.8} />
+                  </div>
+                  <div>
+                    {isCurrency ? (
+                      <CurrencyDisplay
+                        php={value as number}
+                        usdClassName={`font-display text-2xl font-bold ${color}`}
+                        phpClassName="text-xs text-dark/30 font-normal"
+                      />
+                    ) : (
+                      <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
+                    )}
+                    <div className="text-sm text-dark/55 font-medium">{label}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Filters */}
+            {/* Filters */}
         <div className="card py-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="relative">
@@ -1261,6 +1296,13 @@ export default function DonorsPage() {
             </>
           )}
         </div>
+          </>
+        )}
+
+        {/* Allocations Tab Content */}
+        {activeTab === 'allocations' && (
+          <DonationAllocationsSection />
+        )}
       </div>
 
       {selectedId !== null && (

@@ -91,6 +91,16 @@ interface SafehouseDto {
   openDate: string;
 }
 
+interface UpcomingConferenceDto {
+  planId: number;
+  residentId: number;
+  residentName: string;
+  planCategory: string;
+  planDescription: string | null;
+  caseConferenceDate: string;
+  status: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const RISK_COLORS: Record<string, string> = {
@@ -178,9 +188,11 @@ export default function AdminDashboard() {
   const [campaignResult, setCampaignResult] = useState<CampaignResult | null>(null);
   const [safehouseResult, setSafehouseResult] = useState<SafehouseResult | null>(null);
   const [safehouses, setSafehouses] = useState<SafehouseDto[]>([]);
+  const [upcomingConferences, setUpcomingConferences] = useState<UpcomingConferenceDto[]>([]);
   const [loadingResidents, setLoadingResidents] = useState(true);
   const [loadingDonations, setLoadingDonations] = useState(true);
   const [loadingSafehouses, setLoadingSafehouses] = useState(true);
+  const [loadingConferences, setLoadingConferences] = useState(true);
 
   const fetchResidents = useCallback(async () => {
     try {
@@ -209,11 +221,21 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const fetchUpcomingConferences = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/intervention-plans/upcoming-conferences');
+      if (res.ok) setUpcomingConferences(await res.json());
+    } finally {
+      setLoadingConferences(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchResidents();
     fetchDonations();
     fetchSafehouses();
-  }, [fetchResidents, fetchDonations, fetchSafehouses]);
+    fetchUpcomingConferences();
+  }, [fetchResidents, fetchDonations, fetchSafehouses, fetchUpcomingConferences]);
 
   // ML predictions — fire once on mount, graceful on failure
   useEffect(() => {
@@ -952,14 +974,56 @@ export default function AdminDashboard() {
               View all cases →
             </Link>
           </div>
-          {/* Empty state — populates automatically when future conference dates are entered */}
-          <div className="text-center py-8 text-dark/30">
-            <Calendar size={32} className="mx-auto mb-2 opacity-30" strokeWidth={1.2} />
-            <p className="text-sm font-medium text-dark/40">No upcoming conferences scheduled</p>
-            <p className="text-xs mt-1 text-dark/30">
-              Case conference dates set in intervention plans will appear here automatically.
-            </p>
-          </div>
+          {loadingConferences ? (
+            <div className="flex justify-center py-8">
+              <div className="w-8 h-8 rounded-full border-4 border-teal border-t-transparent animate-spin" />
+            </div>
+          ) : upcomingConferences.length === 0 ? (
+            <div className="text-center py-8 text-dark/30">
+              <Calendar size={32} className="mx-auto mb-2 opacity-30" strokeWidth={1.2} />
+              <p className="text-sm font-medium text-dark/40">No upcoming conferences scheduled</p>
+              <p className="text-xs mt-1 text-dark/30">
+                Case conference dates set in intervention plans will appear here automatically.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {upcomingConferences.map((conf) => (
+                <Link
+                  key={conf.planId}
+                  to={`/admin/resident/${conf.residentId}`}
+                  className="block p-4 rounded-xl border border-dark/8 hover:border-teal/30 hover:bg-teal/5 transition-all group"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-navy group-hover:text-teal transition-colors truncate">
+                          {conf.residentName}
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-navy/8 text-navy shrink-0">
+                          {conf.planCategory}
+                        </span>
+                      </div>
+                      {conf.planDescription && (
+                        <p className="text-sm text-dark/60 truncate mb-2">{conf.planDescription}</p>
+                      )}
+                      <div className="flex items-center gap-3 text-xs text-dark/50">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} />
+                          {new Date(conf.caseConferenceDate).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric', year: 'numeric'
+                          })}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-dark/5">
+                          {conf.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── RECENT ACTIVITY ──────────────────────────────────────────────── */}
