@@ -129,7 +129,7 @@ public class EmailService
 
     // ── Contact form notification ─────────────────────────────────────────────
 
-    public async Task SendContactNotificationAsync(string senderName, string senderEmail, string topic, string message)
+    public async Task SendContactNotificationAsync(string senderName, string senderEmail, string? topic, string message)
     {
         var adminEmail = _fromEmail; // notify the same admin inbox
         var html = $"""

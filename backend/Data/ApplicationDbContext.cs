@@ -329,5 +329,14 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .HasForeignKey(u => u.SupporterId)
              .IsRequired(false);
         });
+        
+    }
+    private static void ConfigureContactMessages(ModelBuilder b)
+    {
+        b.Entity<ContactMessage>(e =>
+        {
+            e.Property(m => m.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+            e.Property(m => m.IsResolved).HasDefaultValue(false);
+        });
     }
 }
