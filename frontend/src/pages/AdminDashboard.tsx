@@ -638,8 +638,8 @@ export default function AdminDashboard() {
             color="bg-navy/10 text-navy"
           />
           <StatCard
-            label="Supporter Health"
-            value={loadingDonations ? '—' : `${activeCount} active`}
+            label="Total Donors"
+            value={loadingDonations ? '—' : String(allSupporterIds.size)}
             sub={loadingDonations ? '' : (() => {
               if (churnResult?.available) {
                 const preds = churnResult.predictions ?? [];
