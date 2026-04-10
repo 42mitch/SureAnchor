@@ -429,25 +429,38 @@ export default function DonorPortalPage() {
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-semibold text-dark mb-2">Donation Amount (in PHP)</label>
-                  <div className="grid grid-cols-4 gap-2 mb-3">
-                    {[500, 1000, 2500, 5000].map(amt => (
-                      <button key={amt} type="button"
-                        onClick={() => setDonateAmount(amt.toString())}
-                        className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all ${
-                          donateAmount === amt.toString()
-                            ? 'bg-navy text-white border-navy'
-                            : 'bg-white text-navy border-dark/20 hover:border-navy'
-                        }`}>
-                        <div>${Math.round(phpToUsd(amt))}</div>
-                        <div className="text-[10px] opacity-60">(₱{amt.toLocaleString()})</div>
-                      </button>
-                    ))}
+                  <label className="block text-sm font-semibold text-dark mb-2">Donation Amount (USD)</label>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    {[
+                      { usd: 10, impact: 'Fund a trauma counseling session' },
+                      { usd: 20, impact: 'Feed a child for a full week' },
+                      { usd: 50, impact: 'Provide one month of education' },
+                      { usd: 85, impact: 'Cover one month of shelter and food' },
+                    ].map(({ usd, impact }) => {
+                      const phpAmt = Math.round(usd * 58.5);
+                      return (
+                        <button key={usd} type="button"
+                          onClick={() => setDonateAmount(phpAmt.toString())}
+                          className={`p-3 rounded-xl text-left border-2 transition-all ${
+                            donateAmount === phpAmt.toString()
+                              ? 'bg-navy text-white border-navy'
+                              : 'bg-white text-navy border-dark/20 hover:border-navy hover:shadow-sm'
+                          }`}>
+                          <div className="font-bold text-lg mb-0.5">${usd}</div>
+                          <div className={`text-[11px] leading-tight ${
+                            donateAmount === phpAmt.toString() ? 'text-white/80' : 'text-dark/60'
+                          }`}>{impact}</div>
+                          <div className={`text-[10px] mt-1 ${
+                            donateAmount === phpAmt.toString() ? 'text-white/50' : 'text-dark/40'
+                          }`}>₱{phpAmt.toLocaleString()}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                   <input type="number" min="1" step="1" value={donateAmount}
                     onChange={e => setDonateAmount(e.target.value)} required
                     className="w-full px-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm transition-all"
-                    placeholder="Or enter a custom amount" />
+                    placeholder="Or enter a custom amount in PHP" />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-dark mb-2">Campaign</label>
