@@ -64,9 +64,9 @@ public class AuthController : ControllerBase
 
         var user = new ApplicationUser
         {
-            UserName    = req.Email,
-            Email       = req.Email,
-            DisplayName = req.DisplayName?.Trim().Length > 0 ? req.DisplayName.Trim() : req.Email,
+            UserName       = req.Email,
+            Email          = req.Email,
+            DisplayName    = req.DisplayName?.Trim().Length > 0 ? req.DisplayName.Trim() : req.Email,
             EmailConfirmed = true,
         };
 
@@ -82,6 +82,26 @@ public class AuthController : ControllerBase
             await _roleManager.CreateAsync(new IdentityRole("Donor"));
 
         await _userManager.AddToRoleAsync(user, "Donor");
+
+        // Create a Supporter record immediately so country is stored
+        var db = HttpContext.RequestServices.GetRequiredService<Backend.Data.ApplicationDbContext>();
+        var nextId = (db.Supporters.Any() ? db.Supporters.Max(s => s.SupporterId) : 0) + 1;
+        var supporter = new Supporter
+        {
+            SupporterId        = nextId,
+            SupporterType      = "MonetaryDonor",
+            DisplayName        = user.DisplayName ?? user.Email ?? req.Email,
+            Email              = user.Email,
+            Country            = string.IsNullOrWhiteSpace(req.Country) ? null : req.Country.Trim(),
+            Status             = "Active",
+            CreatedAt          = DateTime.UtcNow,
+            AcquisitionChannel = "Website",
+        };
+        db.Supporters.Add(supporter);
+        await db.SaveChangesAsync();
+
+        user.SupporterId = supporter.SupporterId;
+        await _userManager.UpdateAsync(user);
 
         // Sign them in immediately after registration
         await _signInManager.SignInAsync(user, isPersistent: false);
@@ -208,5 +228,5 @@ public class AuthController : ControllerBase
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
 public record LoginRequest(string Email, string Password);
-public record RegisterRequest(string Email, string Password, string? DisplayName);
+public record RegisterRequest(string Email, string Password, string? DisplayName, string? Country);
 public record UserResponse(string Email, string? DisplayName, List<string> Roles);

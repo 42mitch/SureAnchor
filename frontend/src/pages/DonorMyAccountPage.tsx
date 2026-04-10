@@ -1,17 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { UserCircle, Mail, Heart, KeyRound, Eye, EyeOff, Check, ArrowLeft } from 'lucide-react';
+import { UserCircle, Mail, Heart, KeyRound, Eye, EyeOff, Check, ArrowLeft, Globe } from 'lucide-react';
 import PublicLayout from '../layouts/PublicLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import { COUNTRIES } from '../utils/countries';
 
 export default function DonorMyAccountPage() {
   const { user, refreshUser } = useAuth();
 
-  const [displayName, setDisplayName]   = useState(user?.displayName ?? '');
-  const [savingName, setSavingName]     = useState(false);
-  const [nameSaved, setNameSaved]       = useState(false);
-  const [nameError, setNameError]       = useState('');
+  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [country, setCountry]         = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSaved, setProfileSaved]   = useState(false);
+  const [profileError, setProfileError]   = useState('');
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword]         = useState('');
@@ -23,29 +25,45 @@ export default function DonorMyAccountPage() {
   const [passwordSaved, setPasswordSaved]     = useState(false);
   const [passwordError, setPasswordError]     = useState('');
 
+  // Fetch current country on mount
+  useEffect(() => {
+    apiFetch('/api/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.country) setCountry(data.country); })
+      .catch(() => {});
+  }, []);
+
   const nameParts = (user?.displayName ?? '').trim().split(/\s+/);
   const initials  = nameParts.length >= 2
     ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
     : (user?.displayName ?? 'U').slice(0, 2).toUpperCase();
 
-  async function handleSaveName(e: React.FormEvent) {
+  async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
-    if (!displayName.trim()) { setNameError('Display name cannot be empty.'); return; }
-    setNameError('');
-    setSavingName(true);
-    const res = await apiFetch('/api/profile/display-name', {
-      method: 'PATCH',
-      body: JSON.stringify({ displayName: displayName.trim() }),
-    });
-    if (res.ok) {
+    if (!displayName.trim()) { setProfileError('Display name cannot be empty.'); return; }
+    setProfileError('');
+    setSavingProfile(true);
+
+    const [nameRes, countryRes] = await Promise.all([
+      apiFetch('/api/profile/display-name', {
+        method: 'PATCH',
+        body: JSON.stringify({ displayName: displayName.trim() }),
+      }),
+      apiFetch('/api/profile/country', {
+        method: 'PATCH',
+        body: JSON.stringify({ country: country || null }),
+      }),
+    ]);
+
+    if (nameRes.ok && countryRes.ok) {
       await refreshUser();
-      setNameSaved(true);
-      setTimeout(() => setNameSaved(false), 3000);
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
     } else {
-      const err = await res.json().catch(() => ({}));
-      setNameError(err.message ?? 'Failed to update display name.');
+      const err = await (nameRes.ok ? countryRes : nameRes).json().catch(() => ({}));
+      setProfileError(err.message ?? 'Failed to save profile.');
     }
-    setSavingName(false);
+    setSavingProfile(false);
   }
 
   async function handleChangePassword(e: React.FormEvent) {
@@ -60,9 +78,7 @@ export default function DonorMyAccountPage() {
     });
     if (res.ok) {
       setPasswordSaved(true);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
       setTimeout(() => setPasswordSaved(false), 3000);
     } else {
       const err = await res.json().catch(() => ({}));
@@ -100,10 +116,11 @@ export default function DonorMyAccountPage() {
             </div>
           </div>
 
-          <form onSubmit={handleSaveName} className="space-y-4">
+          <form onSubmit={handleSaveProfile} className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-widest text-dark/40 flex items-center gap-2">
               <UserCircle size={14} /> Profile
             </h3>
+
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Display Name</label>
               <input
@@ -111,8 +128,8 @@ export default function DonorMyAccountPage() {
                 onChange={e => setDisplayName(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
               />
-              {nameError && <p className="text-xs text-red-500 mt-1">{nameError}</p>}
             </div>
+
             <div>
               <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Email</label>
               <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dark/8 bg-dark/3">
@@ -121,9 +138,26 @@ export default function DonorMyAccountPage() {
               </div>
               <p className="text-xs text-dark/30 mt-1">To change your email, contact us at hello@sureanchor.org.</p>
             </div>
-            <button type="submit" disabled={savingName}
+
+            <div>
+              <label className="block text-xs font-semibold text-dark/50 uppercase tracking-widest mb-2">Country</label>
+              <div className="relative">
+                <Globe size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/30 pointer-events-none" />
+                <select
+                  value={country} onChange={e => setCountry(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
+                >
+                  <option value="">Select your country…</option>
+                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {profileError && <p className="text-xs text-red-500">{profileError}</p>}
+
+            <button type="submit" disabled={savingProfile}
               className="btn-primary text-sm flex items-center gap-2 disabled:opacity-60">
-              {nameSaved ? <><Check size={15} /> Saved</> : savingName ? 'Saving...' : 'Save Name'}
+              {profileSaved ? <><Check size={15} /> Saved</> : savingProfile ? 'Saving...' : 'Save Profile'}
             </button>
           </form>
         </div>

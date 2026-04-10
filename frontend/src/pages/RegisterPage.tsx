@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, User, ArrowRight } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
+import { COUNTRIES } from '../utils/countries';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
@@ -21,12 +22,13 @@ export default function RegisterPage() {
   const navigate = useNavigate();
 
   const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const [email, setEmail]             = useState('');
+  const [country, setCountry]         = useState('');
+  const [password, setPassword]       = useState('');
+  const [confirm, setConfirm]         = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]             = useState('');
+  const [loading, setLoading]         = useState(false);
 
   const personNameRe = /^[A-Za-z\s'\-]+$/;
 
@@ -50,12 +52,12 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL ?? ''}/api/auth/register`,
+        `${API_BASE}/api/auth/register`,
         {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, displayName }),
+          body: JSON.stringify({ email, password, displayName, country: country || null }),
         }
       );
       const data = await res.json();
@@ -63,7 +65,6 @@ export default function RegisterPage() {
         setError(data.message ?? 'Registration failed. Please try again.');
         return;
       }
-      // Registration signs them in automatically — navigate to donor portal
       navigate('/donor', { replace: true });
     } catch {
       setError('Unable to connect to the server. Please try again.');
@@ -81,7 +82,6 @@ export default function RegisterPage() {
 
       <div className="relative w-full max-w-md">
         <div className="bg-white rounded-3xl shadow-2xl p-8 sm:p-10 animate-fade-in">
-          {/* Logo */}
           <div className="flex justify-center mb-8">
             <div className="flex flex-col items-center gap-3">
               <AnchorLogo size="lg" variant="dark" />
@@ -106,7 +106,6 @@ export default function RegisterPage() {
             Continue with Google
           </a>
 
-          {/* Divider */}
           <div className="flex items-center gap-3 mb-6">
             <div className="flex-1 h-px bg-dark/10" />
             <span className="text-xs font-medium text-dark/40 uppercase tracking-widest">or create with email</span>
@@ -128,10 +127,8 @@ export default function RegisterPage() {
                   <User size={18} />
                 </div>
                 <input
-                  type="text"
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                  required
+                  type="text" value={displayName}
+                  onChange={e => setDisplayName(e.target.value)} required
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm placeholder-dark/30 transition-all"
                   placeholder="Maria Santos"
                 />
@@ -146,14 +143,24 @@ export default function RegisterPage() {
                   <Mail size={18} />
                 </div>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
+                  type="email" value={email}
+                  onChange={e => setEmail(e.target.value)} required
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm placeholder-dark/30 transition-all"
                   placeholder="you@email.com"
                 />
               </div>
+            </div>
+
+            {/* Country */}
+            <div>
+              <label className="block text-sm font-semibold text-dark mb-2">Country</label>
+              <select
+                value={country} onChange={e => setCountry(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm transition-all"
+              >
+                <option value="">Select your country…</option>
+                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
 
             {/* Password */}
@@ -164,18 +171,13 @@ export default function RegisterPage() {
                   <Lock size={18} />
                 </div>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
+                  type={showPassword ? 'text' : 'password'} value={password}
+                  onChange={e => setPassword(e.target.value)} required
                   className="w-full pl-11 pr-12 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm placeholder-dark/30 transition-all"
                   placeholder="At least 14 characters"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-dark/30 hover:text-dark/60 transition-colors"
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-dark/30 hover:text-dark/60 transition-colors">
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
@@ -190,28 +192,20 @@ export default function RegisterPage() {
                   <Lock size={18} />
                 </div>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirm}
-                  onChange={e => setConfirm(e.target.value)}
-                  required
+                  type={showPassword ? 'text' : 'password'} value={confirm}
+                  onChange={e => setConfirm(e.target.value)} required
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm placeholder-dark/30 transition-all"
                   placeholder="Re-enter your password"
                 />
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center justify-center gap-2 w-full bg-teal text-white font-semibold py-3.5 rounded-xl hover:bg-teal-dark transition-all duration-200 shadow-sm hover:shadow-md text-sm mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
+            <button type="submit" disabled={loading}
+              className="flex items-center justify-center gap-2 w-full bg-teal text-white font-semibold py-3.5 rounded-xl hover:bg-teal-dark transition-all duration-200 shadow-sm hover:shadow-md text-sm mt-2 disabled:opacity-60 disabled:cursor-not-allowed">
               {loading ? (
                 <span className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
               ) : (
-                <>
-                  Create Account
-                  <ArrowRight size={17} />
-                </>
+                <> Create Account <ArrowRight size={17} /> </>
               )}
             </button>
           </form>
