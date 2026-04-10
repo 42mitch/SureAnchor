@@ -174,7 +174,7 @@ export default function MyAccountPage() {
                   />
                   <button id={btnId} type="button" onClick={toggle}
                     aria-label={show ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-dark/30 hover:text-dark/60">
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg text-dark/50 hover:text-dark/70">
                     {show ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                   </button>
                 </div>
