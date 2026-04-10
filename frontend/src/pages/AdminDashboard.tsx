@@ -1174,27 +1174,83 @@ export default function AdminDashboard() {
                 );
               })()}
 
-              {/* Link to full Social Media Strategy page */}
-              <Link
-                to="/admin/social-media"
-                className="rounded-2xl border border-teal/20 bg-teal/4 p-5 flex flex-col justify-between hover:bg-teal/8 transition-colors group"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <BarChart2 size={15} className="text-teal" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-dark/40">Social Media Strategy</span>
+              {/* ML · Campaign comparison bar chart */}
+              {campaignResult === null ? (
+                <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
+                  <Brain size={16} className="text-dark/30" />
+                  <span className="text-xs text-dark/35 font-medium">Loading campaign comparison…</span>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-navy mb-1">
-                    View full posting strategy
-                  </p>
-                  <p className="text-xs text-dark/50">
-                    Best times, best content types, what drives donations vs. just likes, and when to post next.
-                  </p>
+              ) : !campaignResult.available ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex items-center gap-3">
+                  <Brain size={15} className="text-amber-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700">ML · Campaign Comparison — Unavailable</p>
+                    <p className="text-xs text-amber-600 mt-0.5">{campaignResult.reason ?? 'ML service not connected.'}</p>
+                  </div>
                 </div>
-                <span className="mt-4 text-xs text-teal font-semibold group-hover:underline">
-                  Open Social Media Strategy →
-                </span>
-              </Link>
+              ) : (() => {
+                // Roll up each campaign to a single average score
+                const campaignMap: Record<string, number[]> = {};
+                (campaignResult.scorecard ?? []).forEach(c => {
+                  if (!campaignMap[c.campaign_name]) campaignMap[c.campaign_name] = [];
+                  campaignMap[c.campaign_name].push(campaignMonthSuccessProb(c));
+                });
+                const campaigns = Object.entries(campaignMap)
+                  .map(([name, probs]) => ({
+                    name,
+                    avg: probs.reduce((a, b) => a + b, 0) / probs.length,
+                    months: probs.length,
+                  }))
+                  .sort((a, b) => b.avg - a.avg);
+                const maxAvg = campaigns[0]?.avg ?? 1;
+                function tierColor(avg: number) {
+                  if (avg >= 0.65) return { bar: '#d97706', label: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' };
+                  if (avg >= 0.45) return { bar: '#eab308', label: 'text-yellow-700', badge: 'bg-yellow-100 text-yellow-700' };
+                  return { bar: '#94a3b8', label: 'text-slate-500', badge: 'bg-slate-100 text-slate-500' };
+                }
+                return (
+                  <div className="rounded-2xl border border-gold/20 bg-gold/4 p-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <BarChart2 size={15} className="text-gold" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Campaign Comparison</span>
+                    </div>
+                    <p className="text-xs text-dark/45 mb-4 leading-relaxed">
+                      Average ML effectiveness score per campaign across all months run.
+                    </p>
+                    {campaigns.length === 0 ? (
+                      <p className="text-xs text-dark/40">No campaign data available yet.</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {campaigns.map(({ name, avg, months }) => {
+                          const { bar, label, badge } = tierColor(avg);
+                          const pct = maxAvg > 0 ? (avg / maxAvg) * 100 : 0;
+                          return (
+                            <div key={name}>
+                              <div className="flex items-center justify-between mb-1 gap-2">
+                                <span className="text-xs font-semibold text-dark truncate flex-1">{name}</span>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badge}`}>
+                                    {months}mo
+                                  </span>
+                                  <span className={`text-xs font-extrabold tabular-nums ${label}`}>
+                                    {Math.round(avg * 100)}%
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="h-2 bg-dark/8 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${pct}%`, backgroundColor: bar }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
           </div>
