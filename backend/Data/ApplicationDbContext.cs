@@ -30,6 +30,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Donation> Donations => Set<Donation>();
     public DbSet<InKindDonationItem> InKindDonationItems => Set<InKindDonationItem>();
     public DbSet<DonationAllocation> DonationAllocations => Set<DonationAllocation>();
+    public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
 
     // Domain 4 — Outreach
     public DbSet<PublicImpactSnapshot> PublicImpactSnapshots => Set<PublicImpactSnapshot>();
@@ -55,6 +56,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         ConfigureInKindDonationItems(modelBuilder);
         ConfigureDonationAllocations(modelBuilder);
         ConfigureApplicationUser(modelBuilder);
+        ConfigureContactMessages(modelBuilder);
 
         // Apply snake_case LAST — after all keys/relationships are fully registered
         ApplySnakeCaseNaming(modelBuilder);

@@ -1,5 +1,6 @@
 using Backend.Data;
 using Backend.Models;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -32,11 +33,13 @@ public class DonationsController : ControllerBase
 
     private readonly ApplicationDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly EmailService _email;
 
-    public DonationsController(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
+    public DonationsController(ApplicationDbContext db, UserManager<ApplicationUser> userManager, EmailService email)
     {
         _db = db;
         _userManager = userManager;
+        _email = email;
     }
 
     // ── GET /api/donations ────────────────────────────────────────────────────
@@ -165,6 +168,19 @@ public class DonationsController : ControllerBase
             };
             _db.Donations.Add(donation);
             await _db.SaveChangesAsync();
+
+            // Send confirmation email if donor's email is confirmed
+            if (appUser.EmailConfirmed && !string.IsNullOrWhiteSpace(appUser.Email))
+            {
+                var displayName = appUser.DisplayName ?? appUser.Email;
+                var campaignName = donation.CampaignName ?? "General Donation";
+                _ = Task.Run(async () =>
+                {
+                    try { await _email.SendDonationConfirmationAsync(appUser.Email, displayName, donation.Amount ?? 0, campaignName); }
+                    catch { }
+                });
+            }
+
             return Ok(new { donation.DonationId, message = "Thank you for your donation!" });
         }
         catch (Exception ex)
@@ -186,40 +202,23 @@ public class DonationsController : ControllerBase
         if (!TryParseDonationDate(dto.DonationDate, out var donationDate, out var dateError))
             return BadRequest(new { error = dateError });
 
-        string stage = "compute-id";
-        try
+        var donation = new Donation
         {
-            var nextId = (_db.Donations.Any() ? _db.Donations.Max(d => d.DonationId) : 0) + 1;
-            stage = "create-donation";
-            var donation = new Donation
-            {
-                DonationId     = nextId,
-                SupporterId    = dto.SupporterId,
-                DonationType   = dto.DonationType,
-                DonationDate   = donationDate,
-                IsRecurring    = dto.IsRecurring,
-                CampaignName   = dto.CampaignName,
-                ChannelSource  = dto.ChannelSource,
-                CurrencyCode   = dto.CurrencyCode ?? "PHP",
-                Amount         = dto.Amount,
-                EstimatedValue = dto.EstimatedValue,
-                ImpactUnit     = dto.ImpactUnit,
-                Notes          = dto.Notes,
-            };
-            _db.Donations.Add(donation);
-            stage = "save";
-            await _db.SaveChangesAsync();
-            return Ok(new { donation.DonationId });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new
-            {
-                error  = ex.Message,
-                detail = ex.InnerException?.Message,
-                stage
-            });
-        }
+            SupporterId = dto.SupporterId,
+            DonationType = dto.DonationType,
+            DonationDate = donationDate,
+            IsRecurring = dto.IsRecurring,
+            CampaignName = dto.CampaignName,
+            ChannelSource = dto.ChannelSource,
+            CurrencyCode = dto.CurrencyCode ?? "PHP",
+            Amount = dto.Amount,
+            EstimatedValue = dto.EstimatedValue,
+            ImpactUnit = dto.ImpactUnit,
+            Notes = dto.Notes,
+        };
+        _db.Donations.Add(donation);
+        await _db.SaveChangesAsync();
+        return Ok(new { donation.DonationId });
     }
 
     // ── PUT /api/donations/{id} ───────────────────────────────────────────────
@@ -280,25 +279,22 @@ public record DonationDto(
     string? Notes
 );
 
-// Note: data annotation attributes on record primary constructor parameters
-// are not supported in .NET 10 and cause 500 errors. Validation is handled
-// on the frontend and via the TryParseDonationDate helper instead.
 public record DonorGiveDto(
-    decimal Amount,
+    [Range(typeof(decimal), "0.01", "1000000000")] decimal Amount,
     string? CampaignName,
     string? Notes
 );
 
 public record DonationWriteDto(
-    int SupporterId,
-    string DonationType,
-    string DonationDate,
+    [Range(1, int.MaxValue)] int SupporterId,
+    [Required] string DonationType,
+    [Required] string DonationDate,
     bool IsRecurring,
     string? CampaignName,
     string? ChannelSource,
     string? CurrencyCode,
-    decimal? Amount,
-    decimal? EstimatedValue,
+    [Range(typeof(decimal), "0", "1000000000")] decimal? Amount,
+    [Range(typeof(decimal), "0", "1000000000")] decimal? EstimatedValue,
     string? ImpactUnit,
     string? Notes
 );

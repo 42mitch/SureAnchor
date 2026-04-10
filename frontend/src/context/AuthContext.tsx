@@ -5,6 +5,7 @@ export interface AuthUser {
   email: string;
   displayName: string | null;
   roles: string[];
+  emailConfirmed: boolean;
 }
 
 interface AuthContextValue {
@@ -28,7 +29,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch(() => setUser(null));
   }
 
-  // Check existing session on mount
   useEffect(() => {
     fetchMe().finally(() => setLoading(false));
   }, []);

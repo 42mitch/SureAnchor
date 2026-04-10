@@ -9,6 +9,7 @@ import ListPaginationBar from '../components/ListPaginationBar';
 import { CurrencyDisplay, CurrencyDisplayDetailed } from '../components/CurrencyDisplay';
 import { phpToUsd } from '../utils/currency';
 import { COUNTRIES } from '../utils/countries';
+import UnconfirmedEmailBanner from '../components/UnconfirmedEmailBanner';
 
 interface Donation {
   donationId: number;
@@ -163,6 +164,7 @@ export default function DonorPortalPage() {
 
   return (
     <PublicLayout>
+      {user && !user.emailConfirmed && <UnconfirmedEmailBanner />}
       {validationMsg && <ValidationModal message={validationMsg} onClose={() => setValidationMsg('')} />}
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">

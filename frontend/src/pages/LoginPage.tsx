@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, ArrowRight } from 'lucide-react';
-
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
 
@@ -31,6 +31,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
   const [error, setError] = useState(
     oauthError === 'google_failed' ? 'Google sign-in failed. Please try again or use email/password.' :
     oauthError === 'no_email'      ? 'Your Google account did not provide an email address.' :
@@ -146,6 +147,13 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            <button type="button" onClick={() => setShowForgot(true)}
+              className="text-xs text-teal hover:underline">
+              Forgot password?
+            </button>
+            {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
+
+
 
             {/* Submit */}
             <button

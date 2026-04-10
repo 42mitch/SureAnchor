@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, Home, HeartHandshake,
   BarChart2, Settings, LogOut, Menu, ChevronRight, ShieldAlert,
-  UserCog, UserCircle, Share2, Building2
+  UserCog, UserCircle, MessageSquare
 } from 'lucide-react';
 import AnchorLogo from '../components/AnchorLogo';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen]             = useState(false);
   const [profileOpen, setProfileOpen]             = useState(false);
   const [activeAlertsCount, setActiveAlertsCount] = useState<number>(0);
+  const [unresolvedMessages, setUnresolvedMessages] = useState<number>(0);
   const profileRef = useRef<HTMLDivElement>(null);
   const location   = useLocation();
   const navigate   = useNavigate();
@@ -32,8 +33,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         { label: 'Home Visitations',  href: '/admin/visitations',       icon: Home },
         { label: 'Donors',            href: '/admin/donors',            icon: HeartHandshake },
         { label: 'Reports',           href: '/admin/reports',           icon: BarChart2 },
-        { label: 'Social Media',      href: '/admin/social-media',      icon: Share2 },
-        { label: 'Funding Impact',    href: '/admin/safehouse-impact',  icon: Building2 },
       ]
     : [
         { label: 'Caseload',          href: '/admin/caseload',          icon: Users },
@@ -83,6 +82,20 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       const interval = setInterval(fetchAlertsCount, 60000);
       return () => clearInterval(interval);
     }
+  }, [isAdmin]);
+
+  // Fetch unresolved messages count (admin only)
+  useEffect(() => {
+    if (!isAdmin) return;
+    function fetchMessages() {
+      apiFetch('/api/contact-messages/unresolved-count')
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then(data => setUnresolvedMessages(data.count))
+        .catch(() => {});
+    }
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 60000);
+    return () => clearInterval(interval);
   }, [isAdmin]);
 
   const displayName = user?.displayName ?? user?.email ?? 'User';
@@ -161,6 +174,24 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <span className="flex-1">Staff Accounts</span>
               {isActive('/admin/staff-accounts') && <ChevronRight size={14} className="text-gold/70" />}
             </Link>
+            <Link
+              to="/admin/messages"
+              onClick={() => setSidebarOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group ${
+                isActive('/admin/messages')
+                  ? 'bg-white/15 text-white shadow-sm'
+                  : 'text-white/60 hover:text-white hover:bg-white/8'
+              }`}
+            >
+              <MessageSquare size={18} strokeWidth={isActive('/admin/messages') ? 2.2 : 1.8} />
+              <span className="flex-1">Messages</span>
+              {unresolvedMessages > 0 && !isActive('/admin/messages') && (
+                <span className="bg-teal text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {unresolvedMessages}
+                </span>
+              )}
+              {isActive('/admin/messages') && <ChevronRight size={14} className="text-gold/70" />}
+            </Link>
           </>
         )}
       </nav>
@@ -210,16 +241,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <button
               className="lg:hidden p-1.5 rounded-lg text-navy hover:bg-navy/8"
               onClick={() => setSidebarOpen(true)}
-              aria-label="Open navigation menu"
             >
               <Menu size={20} />
             </button>
             <div className="text-sm font-medium text-dark/50">
-              {isActive('/admin/safety')             ? 'Safety Monitor'
-                : isActive('/admin/staff-accounts')  ? 'Staff Accounts'
-                : isActive('/admin/my-account')      ? 'My Account'
-                : isActive('/admin/social-media')    ? 'Social Media'
-                : isActive('/admin/safehouse-impact') ? 'Funding Impact'
+              {isActive('/admin/safety')        ? 'Safety Monitor'
+                : isActive('/admin/staff-accounts') ? 'Staff Accounts'
+                : isActive('/admin/my-account')     ? 'My Account'
+                : isActive('/admin/messages')       ? 'Messages'
                 : navItems.find(n => isActive(n.href))?.label || 'Admin'}
             </div>
           </div>

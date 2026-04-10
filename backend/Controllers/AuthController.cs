@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using Backend.Data;
 using Backend.Models;
+using Backend.Services;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -15,17 +17,20 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IConfiguration _configuration;
+    private readonly EmailService _email;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         RoleManager<IdentityRole> roleManager,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        EmailService email)
     {
         _userManager   = userManager;
         _signInManager = signInManager;
         _roleManager   = roleManager;
         _configuration = configuration;
+        _email         = email;
     }
 
     // ── POST /api/auth/login ──────────────────────────────────────────────────
@@ -47,7 +52,7 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid email or password." });
 
         var roles = await _userManager.GetRolesAsync(user);
-        return Ok(new UserResponse(user.Email!, user.DisplayName, [.. roles]));
+        return Ok(new UserResponse(user.Email!, user.DisplayName, [.. roles], user.EmailConfirmed));
     }
 
     // ── POST /api/auth/register ───────────────────────────────────────────────
@@ -67,7 +72,7 @@ public class AuthController : ControllerBase
             UserName       = req.Email,
             Email          = req.Email,
             DisplayName    = req.DisplayName?.Trim().Length > 0 ? req.DisplayName.Trim() : req.Email,
-            EmailConfirmed = true,
+            EmailConfirmed = false, // requires confirmation
         };
 
         var result = await _userManager.CreateAsync(user, req.Password);
@@ -77,14 +82,12 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = errs.First(), errors = errs });
         }
 
-        // All self-registered accounts are Donors
         if (!await _roleManager.RoleExistsAsync("Donor"))
             await _roleManager.CreateAsync(new IdentityRole("Donor"));
-
         await _userManager.AddToRoleAsync(user, "Donor");
 
-        // Create a Supporter record immediately so country is stored
-        var db = HttpContext.RequestServices.GetRequiredService<Backend.Data.ApplicationDbContext>();
+        // Create Supporter record immediately
+        var db     = HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
         var nextId = (db.Supporters.Any() ? db.Supporters.Max(s => s.SupporterId) : 0) + 1;
         var supporter = new Supporter
         {
@@ -103,14 +106,89 @@ public class AuthController : ControllerBase
         user.SupporterId = supporter.SupporterId;
         await _userManager.UpdateAsync(user);
 
-        // Sign them in immediately after registration
+        // Send confirmation email
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        _ = Task.Run(async () =>
+        {
+            try { await _email.SendEmailConfirmationAsync(user.Email!, user.DisplayName ?? user.Email!, token); }
+            catch { }
+        });
+
         await _signInManager.SignInAsync(user, isPersistent: false);
-        return Ok(new UserResponse(user.Email!, user.DisplayName, ["Donor"]));
+        return Ok(new UserResponse(user.Email!, user.DisplayName, ["Donor"], false));
+    }
+
+    // ── POST /api/auth/confirm-email ──────────────────────────────────────────
+    [HttpPost("confirm-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailRequest req)
+    {
+        var user = await _userManager.FindByEmailAsync(req.Email);
+        if (user == null) return BadRequest(new { message = "Invalid confirmation link." });
+
+        var result = await _userManager.ConfirmEmailAsync(user, req.Token);
+        if (!result.Succeeded)
+            return BadRequest(new { message = "Invalid or expired confirmation link." });
+
+        return Ok(new { message = "Email confirmed successfully." });
+    }
+
+    // ── POST /api/auth/resend-confirmation ────────────────────────────────────
+    [HttpPost("resend-confirmation")]
+    [Authorize]
+    public async Task<IActionResult> ResendConfirmation()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
+        if (user.EmailConfirmed) return BadRequest(new { message = "Email is already confirmed." });
+
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        _ = Task.Run(async () =>
+        {
+            try { await _email.SendEmailConfirmationAsync(user.Email!, user.DisplayName ?? user.Email!, token); }
+            catch { }
+        });
+
+        return Ok(new { message = "Confirmation email sent." });
+    }
+
+    // ── POST /api/auth/forgot-password ────────────────────────────────────────
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest req)
+    {
+        // Always return OK to avoid email enumeration
+        var user = await _userManager.FindByEmailAsync(req.Email);
+        if (user != null && user.EmailConfirmed)
+        {
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            _ = Task.Run(async () =>
+            {
+                try { await _email.SendPasswordResetAsync(user.Email!, user.DisplayName ?? user.Email!, token); }
+                catch { }
+            });
+        }
+        return Ok(new { message = "If an account with that email exists, a reset link has been sent." });
+    }
+
+    // ── POST /api/auth/reset-password ─────────────────────────────────────────
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req)
+    {
+        var user = await _userManager.FindByEmailAsync(req.Email);
+        if (user == null) return BadRequest(new { message = "Invalid reset link." });
+
+        var result = await _userManager.ResetPasswordAsync(user, req.Token, req.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errs = result.Errors.Select(e => e.Description).ToList();
+            return BadRequest(new { message = errs.First(), errors = errs });
+        }
+        return Ok(new { message = "Password reset successfully." });
     }
 
     // ── GET /api/auth/google/signin ───────────────────────────────────────────
-    // Initiates the Google OAuth flow. The browser is redirected to Google's
-    // consent screen. No credentials required — anyone can start this flow.
     [HttpGet("google/signin")]
     [AllowAnonymous]
     public IActionResult GoogleSignIn()
@@ -123,8 +201,6 @@ public class AuthController : ControllerBase
             return Redirect($"{frontendUrl}/login?error=google_failed");
         }
 
-        // After the OAuth middleware processes the Google callback at /signin-google,
-        // it will redirect the browser to this action URL.
         var callbackUrl = Url.Action(nameof(GoogleCallback), "Auth", null, Request.Scheme);
         var properties  = _signInManager.ConfigureExternalAuthenticationProperties(
             GoogleDefaults.AuthenticationScheme, callbackUrl);
@@ -132,9 +208,6 @@ public class AuthController : ControllerBase
     }
 
     // ── GET /api/auth/google/callback ─────────────────────────────────────────
-    // Called by the Google OAuth middleware after it has validated the token.
-    // Creates or links the user account, signs them in, then redirects to the
-    // frontend donor portal.
     [HttpGet("google/callback")]
     [AllowAnonymous]
     public async Task<IActionResult> GoogleCallback()
@@ -146,7 +219,6 @@ public class AuthController : ControllerBase
         if (info == null)
             return Redirect($"{frontendUrl}/login?error=google_failed");
 
-        // ── Case 1: existing Google login link ────────────────────────────────
         var signInResult = await _signInManager.ExternalLoginSignInAsync(
             info.LoginProvider, info.ProviderKey,
             isPersistent: true, bypassTwoFactor: false);
@@ -165,7 +237,6 @@ public class AuthController : ControllerBase
         if (string.IsNullOrEmpty(email))
             return Redirect($"{frontendUrl}/login?error=no_email");
 
-        // ── Case 2: password account exists with the same email ───────────────
         var user = await _userManager.FindByEmailAsync(email);
         if (user != null)
         {
@@ -176,13 +247,12 @@ public class AuthController : ControllerBase
             return Redirect($"{frontendUrl}{dest}");
         }
 
-        // ── Case 3: brand new user — create a Donor account ──────────────────
         user = new ApplicationUser
         {
             UserName       = email,
             Email          = email,
             DisplayName    = !string.IsNullOrWhiteSpace(name) ? name.Trim() : email,
-            EmailConfirmed = true,
+            EmailConfirmed = true, // Google already verified
         };
 
         var createResult = await _userManager.CreateAsync(user);
@@ -221,7 +291,7 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "User not found." });
 
         var roles = await _userManager.GetRolesAsync(user);
-        return Ok(new UserResponse(user.Email!, user.DisplayName, [.. roles]));
+        return Ok(new UserResponse(user.Email!, user.DisplayName, [.. roles], user.EmailConfirmed));
     }
 }
 
@@ -229,4 +299,7 @@ public class AuthController : ControllerBase
 
 public record LoginRequest(string Email, string Password);
 public record RegisterRequest(string Email, string Password, string? DisplayName, string? Country);
-public record UserResponse(string Email, string? DisplayName, List<string> Roles);
+public record UserResponse(string Email, string? DisplayName, List<string> Roles, bool EmailConfirmed);
+public record ConfirmEmailRequest(string Email, string Token);
+public record ForgotPasswordRequest(string Email);
+public record ResetPasswordRequest(string Email, string Token, string NewPassword);

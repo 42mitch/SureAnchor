@@ -23,6 +23,9 @@ import MyAccountPage from './pages/MyAccountPage';
 import DonorMyAccountPage from './pages/DonorMyAccountPage';
 import SocialMediaPage from './pages/SocialMediaPage';
 import SafehouseImpactPage from './pages/SafehouseImpactPage';
+import ConfirmEmailPage from './pages/ConfirmEmailPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import MessagesPage from './pages/MessagesPage';
 
 function App() {
   return (
@@ -38,6 +41,8 @@ function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/confirm-email" element={<ConfirmEmailPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Donor portal — Donor role only */}
           <Route path="/donor" element={
@@ -114,6 +119,9 @@ function App() {
             <RequireAuth roles={['Admin']}>
               <StaffAccountsPage />
             </RequireAuth>
+          } />
+          <Route path="/admin/messages" element={
+            <RequireAuth roles={['Admin']}><MessagesPage /></RequireAuth>
           } />
         </Routes>
       </AuthProvider>
