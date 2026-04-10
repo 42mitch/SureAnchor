@@ -4,7 +4,7 @@ import {
   Users, HeartHandshake, Home, ChevronDown, ChevronUp,
   UserPlus, Heart, Calendar, Activity, AlertTriangle,
   Cpu, Megaphone, Target, Brain, TrendingDown,
-  Trophy, BarChart2, Play, RefreshCw, CheckCircle, TrendingUp
+  Trophy, BarChart2, Play, RefreshCw, CheckCircle
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -767,29 +767,6 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-2">
                     <Brain size={14} className="text-navy" />
                     <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Funding Impact &amp; Simulator</span>
-                  </div>
-
-                  {/* Education Forecast */}
-                  <div>
-                    <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Education Forecast</p>
-                    <div className="space-y-1.5">
-                      {shList.map(sh => (
-                        <div key={sh.safehouseId} className="flex items-center justify-between">
-                          <span className="text-xs text-dark/65 font-medium truncate mr-3">
-                            {formatSafehouseName(sh.safehouseName)}
-                          </span>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className="text-xs text-dark/40">{sh.currentEducationProgress.toFixed(1)}% →</span>
-                            <span className="text-xs font-bold text-navy">{sh.predictedEducationProgress.toFixed(1)}%</span>
-                            <span className={`text-xs font-semibold ${sh.delta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                              {sh.delta >= 0 ? '+' : ''}{sh.delta.toFixed(1)}
-                            </span>
-                            {sh.trend === 'Improving' && <TrendingUp size={11} className="text-green-500 flex-shrink-0" />}
-                            {sh.trend === 'Declining' && <TrendingDown size={11} className="text-red-400 flex-shrink-0" />}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
                   </div>
 
                   {/* Template presets */}
