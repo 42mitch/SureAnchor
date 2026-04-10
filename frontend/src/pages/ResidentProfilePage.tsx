@@ -10,6 +10,7 @@ import {
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import { formatSafehouseName } from '../utils/currency';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
@@ -1313,7 +1314,7 @@ export default function ResidentProfilePage() {
               <div className="flex flex-wrap gap-4 text-white/60 text-sm mt-2">
                 <span className="flex items-center gap-1.5">
                   <MapPin size={13} />
-                  {resident.safehouse}
+                  {formatSafehouseName(resident.safehouse)}
                 </span>
                 {resident.dateAdmitted && (
                   <span className="flex items-center gap-1.5">
@@ -1443,7 +1444,7 @@ export default function ResidentProfilePage() {
 
                 {[
                   { label: 'Date Admitted', value: resident.dateAdmitted ?? '—' },
-                  { label: 'Safe House', value: resident.safehouse },
+                  { label: 'Safe House', value: formatSafehouseName(resident.safehouse) },
                   { label: 'Current Status', value: resident.status },
                   { label: 'Risk Level', value: resident.risk },
                   ...(resident.reintegrationType ? [{ label: 'Reintegration Type', value: resident.reintegrationType }] : []),

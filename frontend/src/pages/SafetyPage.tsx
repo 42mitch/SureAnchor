@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
+import { formatSafehouseName } from '../utils/currency';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 
@@ -494,7 +495,7 @@ export default function SafetyPage() {
                                 <span className="font-mono text-sm font-semibold text-navy">Resident {r.internalCode}</span>
                               </div>
                             </td>
-                            <td className="px-5 py-4 text-sm text-dark/65">{r.safehouse}</td>
+                            <td className="px-5 py-4 text-sm text-dark/65">{formatSafehouseName(r.safehouse)}</td>
                             <td className="px-5 py-4 text-sm text-dark/65">{r.age}</td>
                             <td className="px-5 py-4 text-sm text-dark/65">{r.category || '—'}</td>
                             <td className="px-5 py-4">{riskBadge(r.risk)}</td>

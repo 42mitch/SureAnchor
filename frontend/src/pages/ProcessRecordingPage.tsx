@@ -3,6 +3,7 @@ import { Plus, X, FileText, ChevronRight, Search, Trash2, Pencil } from 'lucide-
 import AdminLayout from '../layouts/AdminLayout';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../api';
+import { formatSafehouseName } from '../utils/currency';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
@@ -194,7 +195,7 @@ function NewSessionModal({ residents, onClose, onSaved }: {
               <select required value={form.residentId} onChange={e => set('residentId', e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                 <option value="">Select resident...</option>
-                {residents.map(r => <option key={r.residentId} value={r.residentId}>Resident {r.internalCode} ({r.safehouse})</option>)}
+                {residents.map(r => <option key={r.residentId} value={r.residentId}>Resident {r.internalCode} ({formatSafehouseName(r.safehouse)})</option>)}
               </select>
             </div>
             <div>
@@ -357,7 +358,7 @@ function EditSessionModal({ note, residents, onClose, onSaved }: {
                 className="w-full px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30">
                 {residents.map(r => (
                   <option key={r.residentId} value={r.residentId}>
-                    Resident {r.internalCode} ({r.safehouse})
+                    Resident {r.internalCode} ({formatSafehouseName(r.safehouse)})
                   </option>
                 ))}
               </select>

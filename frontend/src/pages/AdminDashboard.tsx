@@ -4,7 +4,7 @@ import {
   Users, HeartHandshake, Home, ChevronDown, ChevronUp,
   UserPlus, Heart, Calendar, Activity, AlertTriangle,
   Cpu, Megaphone, Target, Brain, TrendingDown,
-  Trophy, BarChart2
+  Trophy, BarChart2, Play, RefreshCw, CheckCircle, TrendingUp
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
-import { formatCurrency, formatUsdK, phpToUsd } from '../utils/currency';
+import { formatCurrency, formatUsdK, phpToUsd, formatSafehouseName } from '../utils/currency';
 import { CurrencyDisplay } from '../components/CurrencyDisplay';
 import { useAuth } from '../context/AuthContext';
 
@@ -32,21 +32,54 @@ interface CampaignScore {
   campaign_name: string;
   month_label: string;
   high_performance_probability: number;
+  /** Model output + deterministic scenario jitter; preferred for dashboard display */
+  simulated_month_success_probability?: number;
   is_high_performing: boolean;
   total_value_php: number;
   total_donations: number;
   rank: number;
 }
+
+function campaignMonthSuccessProb(c: CampaignScore): number {
+  return c.simulated_month_success_probability ?? c.high_performance_probability;
+}
 interface CampaignResult { available: boolean; scorecard?: CampaignScore[]; reason?: string; }
 
-interface SafehousePrediction {
-  safehouse_id: number;
-  safehouse_name: string;
-  predicted_education_progress: number;
-  current_education_progress: number;
+interface SafehouseImpactItem {
+  safehouseId: number;
+  safehouseName: string;
+  city: string;
+  activeResidents: number;
+  totalFunding: number;
+  currentEducationProgress: number;
+  predictedEducationProgress: number;
   delta: number;
+  trend: string;
+  pctEducation: number;
+  pctWellbeing: number;
+  pctOperations: number;
+  pctTransport: number;
+  pctMaintenance: number;
+  pctOutreach: number;
 }
-interface SafehouseResult { available: boolean; predictions?: SafehousePrediction[]; reason?: string; }
+interface SafehouseResult {
+  available: boolean;
+  mlAvailable?: boolean;
+  safehouses?: SafehouseImpactItem[];
+  reason?: string;
+}
+interface SafehouseSimResult {
+  available: boolean;
+  projectedEducationProgress?: number;
+  currentEducationProgress?: number;
+  delta?: number;
+  confidence?: string;
+  recommendation?: string;
+  reason?: string;
+}
+
+type AllocKey = 'education' | 'wellbeing' | 'operations' | 'transport' | 'maintenance' | 'outreach';
+type AllocState = Record<AllocKey, number>;
 
 interface SocialPlatformStat {
   platform: string;
@@ -134,6 +167,72 @@ const PLATFORM_COLORS: Record<string, string> = {
 // Format currency showing USD (PHP)
 const fmt = (n: number) => formatCurrency(n);
 
+// ─── Safehouse simulator constants ────────────────────────────────────────────
+
+const ALLOC_LABELS: Record<AllocKey, string> = {
+  education:   'Education',
+  wellbeing:   'Wellbeing & Health',
+  operations:  'Operations & Shelter',
+  transport:   'Transport',
+  maintenance: 'Maintenance',
+  outreach:    'Outreach',
+};
+
+const ALLOC_COLORS: Record<AllocKey, string> = {
+  education:   '#0d9488',
+  wellbeing:   '#6366f1',
+  operations:  '#f59e0b',
+  transport:   '#10b981',
+  maintenance: '#8b5cf6',
+  outreach:    '#ec4899',
+};
+
+const SIM_TEMPLATES = [
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    alloc: { education: 30, wellbeing: 30, operations: 25, transport: 5, maintenance: 5, outreach: 5 } as AllocState,
+  },
+  {
+    id: 'education',
+    label: 'Education Focus',
+    alloc: { education: 50, wellbeing: 20, operations: 18, transport: 4, maintenance: 4, outreach: 4 } as AllocState,
+  },
+  {
+    id: 'wellbeing',
+    label: 'Wellbeing Focus',
+    alloc: { education: 22, wellbeing: 48, operations: 18, transport: 4, maintenance: 4, outreach: 4 } as AllocState,
+  },
+];
+
+const DEFAULT_ALLOC: AllocState = { education: 35, wellbeing: 28, operations: 22, transport: 5, maintenance: 5, outreach: 5 };
+
+function adjustAlloc(alloc: AllocState, field: AllocKey, newVal: number): AllocState {
+  const clamped = Math.min(100, Math.max(0, newVal));
+  const remaining = Math.round((100 - clamped) * 10) / 10;
+  const others = (Object.keys(alloc) as AllocKey[]).filter(k => k !== field);
+  const othersSum = others.reduce((s, k) => s + alloc[k], 0);
+  const next: AllocState = { ...alloc, [field]: clamped };
+  if (othersSum === 0) {
+    const per = Math.round((remaining / others.length) * 10) / 10;
+    others.forEach(k => { next[k] = per; });
+  } else {
+    const scale = remaining / othersSum;
+    others.forEach(k => { next[k] = Math.round(alloc[k] * scale * 10) / 10; });
+    const drift = Math.round((100 - (Object.values(next) as number[]).reduce((s, v) => s + v, 0)) * 10) / 10;
+    if (drift !== 0) {
+      const largest = [...others].sort((a, b) => next[b] - next[a])[0];
+      next[largest] = Math.round((next[largest] + drift) * 10) / 10;
+    }
+  }
+  return next;
+}
+
+function allocSum(a: AllocState): number {
+  return Math.round((Object.values(a) as number[]).reduce((s, v) => s + v, 0) * 10) / 10;
+}
+
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Section({
@@ -204,6 +303,14 @@ export default function AdminDashboard() {
   const [loadingDonations, setLoadingDonations] = useState(true);
   const [loadingSafehouses, setLoadingSafehouses] = useState(true);
 
+  // Allocation simulator state
+  const [simSelectedId, setSimSelectedId]         = useState<number | ''>('');
+  const [simBudget, setSimBudget]                 = useState(500000);
+  const [simAlloc, setSimAlloc]                   = useState<AllocState>(DEFAULT_ALLOC);
+  const [simResult, setSimResult]                 = useState<SafehouseSimResult | null>(null);
+  const [simLoading, setSimLoading]               = useState(false);
+  const [simActiveTemplate, setSimActiveTemplate] = useState<string | null>(null);
+
   const fetchResidents = useCallback(async () => {
     try {
       const res = await apiFetch('/api/residents');
@@ -249,9 +356,25 @@ export default function AdminDashboard() {
       .then(setCampaignResult)
       .catch(() => setCampaignResult({ available: false, reason: 'ML service unavailable' }));
 
-    apiFetch('/api/ml/safehouse-resources')
+    apiFetch('/api/ml/safehouse-funding-impact')
       .then(r => r.ok ? r.json() : { available: false, reason: 'Request failed' })
-      .then(setSafehouseResult)
+      .then((data: SafehouseResult) => {
+        setSafehouseResult(data);
+        // Pre-select the first safehouse in the simulator
+        if (data.safehouses && data.safehouses.length > 0) {
+          const sh = data.safehouses[0];
+          setSimSelectedId(sh.safehouseId);
+          setSimBudget(sh.totalFunding || 500000);
+          setSimAlloc({
+            education:   sh.pctEducation,
+            wellbeing:   sh.pctWellbeing,
+            operations:  sh.pctOperations,
+            transport:   sh.pctTransport,
+            maintenance: sh.pctMaintenance,
+            outreach:    sh.pctOutreach,
+          });
+        }
+      })
       .catch(() => setSafehouseResult({ available: false, reason: 'ML service unavailable' }));
 
     apiFetch('/api/social-analytics')
@@ -259,6 +382,60 @@ export default function AdminDashboard() {
       .then(setSocialOverview)
       .catch(() => setSocialOverview({ available: false, reason: 'Could not load social data' }));
   }, []);
+
+  // ── Simulator helpers ───────────────────────────────────────────────────────
+
+  function onSelectSimSafehouse(id: number) {
+    setSimSelectedId(id);
+    setSimResult(null);
+    setSimActiveTemplate(null);
+    const sh = safehouseResult?.safehouses?.find(s => s.safehouseId === id);
+    if (sh) {
+      setSimBudget(sh.totalFunding || 500000);
+      setSimAlloc({
+        education:   sh.pctEducation,
+        wellbeing:   sh.pctWellbeing,
+        operations:  sh.pctOperations,
+        transport:   sh.pctTransport,
+        maintenance: sh.pctMaintenance,
+        outreach:    sh.pctOutreach,
+      });
+    }
+  }
+
+  function applySimTemplate(t: typeof SIM_TEMPLATES[0]) {
+    setSimAlloc(t.alloc);
+    setSimActiveTemplate(t.id);
+    setSimResult(null);
+  }
+
+  const runSimulation = useCallback(async () => {
+    if (!simSelectedId) return;
+    if (Math.abs(allocSum(simAlloc) - 100) > 0.5) return;
+    setSimLoading(true);
+    setSimResult(null);
+    try {
+      const res = await apiFetch('/api/ml/safehouse-simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          safehouseId:    simSelectedId,
+          totalBudget:    simBudget,
+          pctEducation:   simAlloc.education,
+          pctWellbeing:   simAlloc.wellbeing,
+          pctOperations:  simAlloc.operations,
+          pctTransport:   simAlloc.transport,
+          pctMaintenance: simAlloc.maintenance,
+          pctOutreach:    simAlloc.outreach,
+        }),
+      });
+      setSimResult(res.ok ? await res.json() : { available: false, reason: 'Request failed' });
+    } catch {
+      setSimResult({ available: false, reason: 'ML service unavailable' });
+    } finally {
+      setSimLoading(false);
+    }
+  }, [simSelectedId, simBudget, simAlloc]);
 
   // ── Derived: Residents ──────────────────────────────────────────────────────
   const activeResidents = residents.filter(r => r.status === 'Active');
@@ -337,7 +514,7 @@ export default function AdminDashboard() {
     ...recentAdmissions.slice(0, 2).map(r => ({
       id: `res-${r.residentId}`,
       icon: UserPlus,
-      text: `New resident admitted to ${r.safehouse}`,
+      text: `New resident admitted to ${formatSafehouseName(r.safehouse)}`,
       sub: `${r.caseNo} · ${r.category} · Risk: ${r.risk}`,
       date: r.dateAdmitted!,
       linkTo: `/admin/resident/${r.residentId}`,
@@ -559,11 +736,11 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* ML: Funding Impact — compact overview card */}
+            {/* ML: Funding Impact & Allocation Simulator */}
             {safehouseResult === null ? (
               <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
                 <Brain size={16} className="text-dark/30" />
-                <span className="text-xs text-dark/35 font-medium">Loading safehouse resource predictions…</span>
+                <span className="text-xs text-dark/35 font-medium">Loading safehouse predictions…</span>
               </div>
             ) : !safehouseResult.available ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3">
@@ -573,39 +750,190 @@ export default function AdminDashboard() {
                   <p className="text-xs text-amber-600 mt-0.5 truncate">{safehouseResult.reason ?? 'ML service not connected.'}</p>
                 </div>
               </div>
-            ) : (
-              <div className="rounded-2xl border border-navy/12 bg-navy/3 p-5">
-                <div className="flex items-center justify-between mb-3">
+            ) : (() => {
+              const shList = safehouseResult.safehouses ?? [];
+              const simSumOk = Math.abs(allocSum(simAlloc) - 100) <= 0.5;
+              return (
+                <div className="rounded-2xl border border-navy/12 bg-navy/3 p-5 space-y-5">
+
+                  {/* Header */}
                   <div className="flex items-center gap-2">
                     <Brain size={14} className="text-navy" />
-                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Funding Impact</span>
+                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Funding Impact &amp; Simulator</span>
                   </div>
-                  <a href="/admin/safehouse-impact" className="text-xs font-semibold text-teal hover:text-teal-dark">
-                    Full analysis →
-                  </a>
-                </div>
-                <div className="space-y-2">
-                  {(safehouseResult.predictions ?? []).map(sh => (
-                    <div key={sh.safehouse_id} className="flex items-center justify-between text-sm">
-                      <span className="text-dark/70 font-medium truncate mr-3">{sh.safehouse_name}</span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-dark/50 text-xs">{sh.current_education_progress}% →</span>
-                        <span className="font-bold text-navy">{sh.predicted_education_progress}%</span>
-                        <span className={`text-xs font-semibold ${sh.delta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          {sh.delta >= 0 ? '+' : ''}{sh.delta}
-                        </span>
+
+                  {/* Education Forecast */}
+                  <div>
+                    <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Education Forecast</p>
+                    <div className="space-y-1.5">
+                      {shList.map(sh => (
+                        <div key={sh.safehouseId} className="flex items-center justify-between">
+                          <span className="text-xs text-dark/65 font-medium truncate mr-3">
+                            {formatSafehouseName(sh.safehouseName)}
+                          </span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs text-dark/40">{sh.currentEducationProgress.toFixed(1)}% →</span>
+                            <span className="text-xs font-bold text-navy">{sh.predictedEducationProgress.toFixed(1)}%</span>
+                            <span className={`text-xs font-semibold ${sh.delta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {sh.delta >= 0 ? '+' : ''}{sh.delta.toFixed(1)}
+                            </span>
+                            {sh.trend === 'Improving' && <TrendingUp size={11} className="text-green-500 flex-shrink-0" />}
+                            {sh.trend === 'Declining' && <TrendingDown size={11} className="text-red-400 flex-shrink-0" />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Template presets */}
+                  <div>
+                    <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-2">Quick Templates</p>
+                    <div className="flex gap-2">
+                      {SIM_TEMPLATES.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => applySimTemplate(t)}
+                          className={`flex-1 text-xs py-1.5 px-2 rounded-lg border font-medium transition-all ${
+                            simActiveTemplate === t.id
+                              ? 'bg-teal/10 border-teal/30 text-teal'
+                              : 'border-dark/12 text-dark/55 hover:border-teal/25 hover:text-navy bg-white/60'
+                          }`}
+                        >
+                          {simActiveTemplate === t.id && <CheckCircle size={10} className="inline mr-1" />}
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Simulator */}
+                  <div>
+                    <p className="text-xs font-semibold text-dark/40 uppercase tracking-wide mb-3">Allocation Simulator</p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+
+                      {/* Left: controls */}
+                      <div className="space-y-3">
+                        <select
+                          value={simSelectedId}
+                          onChange={e => onSelectSimSafehouse(Number(e.target.value))}
+                          className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2 text-xs text-dark focus:outline-none focus:ring-2 focus:ring-teal/30"
+                        >
+                          <option value="">— Select safehouse —</option>
+                          {shList.map(sh => (
+                            <option key={sh.safehouseId} value={sh.safehouseId}>
+                              {formatSafehouseName(sh.safehouseName)}
+                            </option>
+                          ))}
+                        </select>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-dark/45 whitespace-nowrap">Budget ₱</span>
+                          <input
+                            type="number" min={0} step={10000} value={simBudget}
+                            onChange={e => setSimBudget(Number(e.target.value))}
+                            className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2 text-xs text-dark focus:outline-none focus:ring-2 focus:ring-teal/30"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          {(Object.keys(ALLOC_LABELS) as AllocKey[]).map(key => (
+                            <div key={key}>
+                              <div className="flex justify-between mb-0.5">
+                                <span className="text-xs text-dark/50">{ALLOC_LABELS[key]}</span>
+                                <span className="text-xs font-bold tabular-nums" style={{ color: ALLOC_COLORS[key] }}>
+                                  {simAlloc[key].toFixed(0)}%
+                                </span>
+                              </div>
+                              <input
+                                type="range" min={0} max={100} step={1} value={simAlloc[key]}
+                                onChange={e => {
+                                  setSimAlloc(adjustAlloc(simAlloc, key, Number(e.target.value)));
+                                  setSimActiveTemplate(null);
+                                  setSimResult(null);
+                                }}
+                                style={{ accentColor: ALLOC_COLORS[key] }}
+                                className="w-full h-1 rounded-full appearance-none cursor-pointer"
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${simSumOk ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                            {allocSum(simAlloc).toFixed(0)}% {simSumOk ? '✓' : '⚠'}
+                          </span>
+                          <button
+                            onClick={runSimulation}
+                            disabled={!simSelectedId || !simSumOk || simLoading}
+                            className="flex-1 btn-primary flex items-center justify-center gap-1.5 text-xs py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {simLoading
+                              ? <><RefreshCw size={12} className="animate-spin" /> Running…</>
+                              : <><Play size={12} /> Run Simulation</>}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right: result */}
+                      <div>
+                        {simResult === null && !simLoading && (
+                          <div className="h-full flex flex-col items-center justify-center text-center gap-2 py-6">
+                            <Brain size={24} className="text-dark/15" />
+                            <p className="text-xs text-dark/35">Adjust sliders and run to see projected outcomes</p>
+                          </div>
+                        )}
+                        {simLoading && (
+                          <div className="h-full flex flex-col items-center justify-center gap-2 py-6 animate-pulse">
+                            <Brain size={24} className="text-teal/40" />
+                            <p className="text-xs text-dark/35">Running model…</p>
+                          </div>
+                        )}
+                        {simResult && !simLoading && (
+                          !simResult.available ? (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                              <p className="text-xs font-semibold text-amber-700">Unavailable</p>
+                              <p className="text-xs text-amber-600 mt-1">{simResult.reason}</p>
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border border-teal/20 bg-white p-4 space-y-3 h-full">
+                              <div>
+                                <p className="text-xs text-dark/40 font-semibold uppercase tracking-wide mb-1">Projected Progress</p>
+                                <div className="flex items-end gap-2">
+                                  <span className="font-display text-3xl font-bold text-teal tabular-nums">
+                                    {simResult.projectedEducationProgress?.toFixed(1)}<span className="text-lg">%</span>
+                                  </span>
+                                  <span className={`text-sm font-bold pb-0.5 ${(simResult.delta ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                    {(simResult.delta ?? 0) >= 0 ? '+' : ''}{simResult.delta?.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <p className="text-xs text-dark/35 mt-0.5">vs current {simResult.currentEducationProgress?.toFixed(1)}%</p>
+                              </div>
+                              <div className="h-2 bg-dark/8 rounded-full overflow-hidden relative">
+                                <div className="absolute h-full bg-dark/15 rounded-full"
+                                  style={{ width: `${simResult.currentEducationProgress ?? 0}%` }} />
+                                <div className={`absolute h-full rounded-full transition-all duration-700 ${(simResult.delta ?? 0) >= 0 ? 'bg-teal' : 'bg-red-400'}`}
+                                  style={{ width: `${simResult.projectedEducationProgress ?? 0}%` }} />
+                              </div>
+                              {simResult.confidence && (
+                                <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                  simResult.confidence === 'High'   ? 'bg-green-100 text-green-700' :
+                                  simResult.confidence === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                                                                      'bg-red-100 text-red-700'
+                                }`}>
+                                  {simResult.confidence} Confidence
+                                </span>
+                              )}
+                              <p className="text-xs text-dark/60 leading-relaxed">{simResult.recommendation}</p>
+                            </div>
+                          )
+                        )}
                       </div>
                     </div>
-                  ))}
+                  </div>
+
                 </div>
-                <a
-                  href="/admin/safehouse-impact"
-                  className="mt-3 flex items-center justify-center gap-1.5 w-full rounded-xl border border-navy/12 bg-white/60 hover:bg-white py-2 text-xs font-semibold text-navy/70 hover:text-navy transition-colors"
-                >
-                  Allocation Simulator &amp; Full Impact Analysis →
-                </a>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Safehouse occupancy */}
             <div>
@@ -776,47 +1104,58 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* ML Campaign Ranker */}
+            {/* Simulated campaign-month success (ML-backed) */}
             <div className="grid sm:grid-cols-2 gap-4">
               {campaignResult === null ? (
                 <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-3 animate-pulse">
                   <Brain size={16} className="text-dark/30" />
-                  <span className="text-xs text-dark/35 font-medium">Loading campaign rankings…</span>
+                  <span className="text-xs text-dark/35 font-medium">Loading simulated month success…</span>
                 </div>
               ) : !campaignResult.available ? (
                 <div className="rounded-2xl border-2 border-dashed border-dark/15 bg-dark/3 p-5 flex items-center gap-2 text-dark/40">
                   <Cpu size={16} strokeWidth={1.8} />
-                  <span className="text-xs font-bold uppercase tracking-widest">ML · Campaign Ranker</span>
+                  <span className="text-xs font-bold uppercase tracking-widest">ML · Campaign month simulation</span>
                   <span className="ml-auto text-xs bg-dark/10 text-dark/40 px-2 py-0.5 rounded-full font-semibold">Unavailable</span>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-gold/20 bg-gold/4 p-5">
-                  <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-1">
                     <Trophy size={15} className="text-gold" />
-                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Campaign Ranker</span>
+                    <span className="text-xs font-bold uppercase tracking-widest text-dark/40">ML · Campaign month simulation</span>
                   </div>
+                  <p className="text-xs text-dark/45 mb-4 leading-relaxed">
+                    Likely success probability for each <span className="font-semibold text-dark/55">campaign × calendar month</span> (model + small fixed scenario draw).
+                  </p>
                   {(campaignResult.scorecard ?? []).length === 0 ? (
                     <p className="text-xs text-dark/40">No campaign data available yet.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {(campaignResult.scorecard ?? []).slice(0, 5).map(c => (
-                        <div key={`${c.campaign_name}-${c.month_label}`} className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-dark/30 w-4 text-right flex-shrink-0">#{c.rank}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-dark truncate">{c.campaign_name}</p>
-                            <p className="text-xs text-dark/40">{c.month_label}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <div className="w-12 h-1.5 bg-dark/8 rounded-full overflow-hidden">
-                              <div className="h-full bg-gold rounded-full" style={{ width: `${c.high_performance_probability * 100}%` }} />
+                    <div className="space-y-2.5">
+                      {(campaignResult.scorecard ?? []).slice(0, 5).map(c => {
+                        const p = campaignMonthSuccessProb(c);
+                        return (
+                          <div key={`${c.campaign_name}-${c.month_label}`} className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-dark/30 w-4 text-right flex-shrink-0">#{c.rank}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-dark truncate">{c.campaign_name}</p>
+                              <p className="text-xs text-dark/40">{c.month_label}</p>
                             </div>
-                            <span className="text-xs font-bold text-gold">{Math.round(c.high_performance_probability * 100)}%</span>
+                            <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-14 h-1.5 bg-dark/8 rounded-full overflow-hidden">
+                                  <div className="h-full bg-gold rounded-full" style={{ width: `${p * 100}%` }} />
+                                </div>
+                                <span className="text-xs font-bold text-gold tabular-nums">{Math.round(p * 100)}%</span>
+                              </div>
+                              <span className="text-[10px] text-dark/35 uppercase tracking-wide">sim. month</span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
-                  <p className="text-xs text-dark/35 mt-3">Campaigns ranked by predicted high-performance probability.</p>
+                  <p className="text-xs text-dark/35 mt-3 leading-relaxed">
+                    Ranked by simulated month success probability. For planning only—not a guarantee of results.
+                  </p>
                 </div>
               )}
 

@@ -1,3 +1,4 @@
+import hashlib
 import os
 from typing import Any
 
@@ -276,6 +277,17 @@ def predict_donor_churn(req: BatchDonorsRequest) -> dict[str, Any]:
         return {"available": False, "reason": f"Prediction error: {exc}"}
 
 
+def _simulated_campaign_month_success_p(
+    model_prob: float, campaign_name: str, month_label: str
+) -> float:
+    """Scenario-style probability: anchored on the model, with small deterministic jitter per campaign-month."""
+    raw = f"{campaign_name or ''}\0{month_label or ''}".encode("utf-8")
+    seed = int(hashlib.sha256(raw).hexdigest()[:12], 16) % (2**32)
+    rng = np.random.default_rng(seed)
+    jitter = float(rng.normal(0.0, 0.032))
+    return float(np.clip(model_prob + jitter, 0.03, 0.985))
+
+
 @app.post("/predict/campaign-effectiveness")
 def predict_campaign_effectiveness(req: BatchCampaignsRequest) -> dict[str, Any]:
     model = MODELS.get("campaign_effectiveness")
@@ -299,19 +311,23 @@ def predict_campaign_effectiveness(req: BatchCampaignsRequest) -> dict[str, Any]
         scorecard = []
         for i, row in enumerate(req.campaigns):
             prob = float(high_probs[i])
+            cname = str(row.get("campaign_name", "Unknown"))
+            mlabel = str(row.get("month_label", "Unknown"))
+            sim_p = _simulated_campaign_month_success_p(prob, cname, mlabel)
             is_high = bool(pred_labels[i]) if isinstance(pred_labels[i], (int, np.integer, bool)) else (prob >= 0.5)
             scorecard.append(
                 {
-                    "campaign_name": row.get("campaign_name", "Unknown"),
-                    "month_label": row.get("month_label", "Unknown"),
+                    "campaign_name": cname,
+                    "month_label": mlabel,
                     "high_performance_probability": round(prob, 4),
+                    "simulated_month_success_probability": round(sim_p, 4),
                     "is_high_performing": is_high,
                     "total_value_php": float(row.get("month_total_value_php", 0) or 0),
                     "total_donations": int(row.get("month_donations", 0) or 0),
                 }
             )
 
-        scorecard.sort(key=lambda x: x["high_performance_probability"], reverse=True)
+        scorecard.sort(key=lambda x: x["simulated_month_success_probability"], reverse=True)
         for idx, item in enumerate(scorecard, start=1):
             item["rank"] = idx
 

@@ -8,6 +8,7 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 import AddResidentModal from '../components/AddResidentModal';
+import { formatSafehouseName } from '../utils/currency';
 
 interface Resident {
   residentId: number;
@@ -213,7 +214,7 @@ export default function CaseloadPage() {
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30"
             >
               <option value="">Safehouse</option>
-              {safehouseOptions.map(o => <option key={o}>{o}</option>)}
+              {safehouseOptions.map(o => <option key={o} value={o}>{formatSafehouseName(o)}</option>)}
             </select>
             <select
               aria-label="Filter by case category"
@@ -273,7 +274,7 @@ export default function CaseloadPage() {
                       className={`border-b border-dark/5 cursor-pointer hover:bg-teal/4 transition-colors last:border-0 ${(caseloadPag.startIndex + i) % 2 !== 0 ? 'bg-cream/30' : ''}`}
                     >
                       <td className="px-5 py-3.5"><span className="font-mono text-sm font-semibold text-navy">{r.caseNo}</span></td>
-                      <td className="px-5 py-3.5"><span className="text-sm font-medium text-dark/70 bg-navy/6 px-2 py-0.5 rounded-md">{r.safehouse}</span></td>
+                      <td className="px-5 py-3.5"><span className="text-sm font-medium text-dark/70 bg-navy/6 px-2 py-0.5 rounded-md">{formatSafehouseName(r.safehouse)}</span></td>
                       <td className="px-5 py-3.5 text-sm text-dark/70">{r.age}</td>
                       <td className="px-5 py-3.5 text-sm text-dark/70 whitespace-nowrap">{r.category || '—'}</td>
                       <td className="px-5 py-3.5">{riskBadge(r.risk)}</td>
@@ -334,7 +335,7 @@ export default function CaseloadPage() {
               <div className="flex gap-2 flex-wrap">
                 {riskBadge(selectedResident.risk)}
                 {statusBadge(selectedResident.status)}
-                <span className="bg-navy/8 text-navy px-2.5 py-0.5 rounded-full text-xs font-semibold">{selectedResident.safehouse}</span>
+                <span className="bg-navy/8 text-navy px-2.5 py-0.5 rounded-full text-xs font-semibold">{formatSafehouseName(selectedResident.safehouse)}</span>
               </div>
               <div className="card bg-cream p-5">
                 <h3 className="font-semibold text-sm text-navy mb-3 uppercase tracking-wide">Details</h3>

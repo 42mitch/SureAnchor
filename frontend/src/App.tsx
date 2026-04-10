@@ -103,11 +103,6 @@ function App() {
               <SocialMediaPage />
             </RequireAuth>
           } />
-          <Route path="/admin/safehouse-impact" element={
-            <RequireAuth roles={['Admin']}>
-              <SafehouseImpactPage />
-            </RequireAuth>
-          } />
 
           {/* Admin-only pages */}
           <Route path="/admin/safety" element={
