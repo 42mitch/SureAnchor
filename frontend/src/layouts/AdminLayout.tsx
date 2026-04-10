@@ -242,8 +242,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <button
               className="lg:hidden p-1.5 rounded-lg text-navy hover:bg-navy/8"
               onClick={() => setSidebarOpen(true)}
+              aria-label="Open navigation menu"
             >
-              <Menu size={20} />
+              <Menu size={20} aria-hidden="true" />
             </button>
             <div className="text-sm font-medium text-dark/50">
               {isActive('/admin/safety')        ? 'Safety Monitor'
