@@ -246,7 +246,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             >
               <Menu size={20} aria-hidden="true" />
             </button>
-            <div className="text-sm font-medium text-dark/50">
+            <div className="text-sm font-medium text-dark/70">
               {isActive('/admin/safety')        ? 'Safety Monitor'
                 : isActive('/admin/staff-accounts') ? 'Staff Accounts'
                 : isActive('/admin/my-account')     ? 'My Account'
@@ -257,7 +257,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="bg-teal/10 text-teal text-xs font-semibold px-3 py-1.5 rounded-full border border-teal/20">
+            <div className="bg-teal/10 text-teal-dark text-xs font-semibold px-3 py-1.5 rounded-full border border-teal/20">
               {roleLabel}
             </div>
 
