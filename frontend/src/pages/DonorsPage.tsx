@@ -15,6 +15,15 @@ import { CurrencyDisplay, CurrencyDisplayDetailed } from '../components/Currency
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface ChurnPrediction {
+  supporter_id: number;
+  display_name: string;
+  churn_probability: number;
+  risk_tier: 'Critical' | 'High' | 'Medium' | 'Low';
+  recommended_action: string;
+}
+interface ChurnResult { available: boolean; predictions?: ChurnPrediction[]; reason?: string; }
+
 interface Supporter {
   supporterId: number;
   displayName: string;
@@ -1256,9 +1265,20 @@ export default function DonorsPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Supporter | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [pageChurn, setPageChurn] = useState<ChurnResult | null>(null);
 
   useEffect(() => {
-    apiFetch('/api/supporters').then(r => r.ok ? r.json() : []).then(setSupporters).finally(() => setLoading(false));
+    apiFetch('/api/supporters').then(r => r.ok ? r.json() : []).then((data: Supporter[]) => {
+      setSupporters(data);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  // Fetch page-level churn predictions once on mount
+  useEffect(() => {
+    apiFetch('/api/ml/donor-churn')
+      .then(r => r.ok ? r.json() : { available: false })
+      .then(setPageChurn)
+      .catch(() => setPageChurn({ available: false }));
   }, []);
 
   async function handleDelete() {
@@ -1321,29 +1341,64 @@ export default function DonorsPage() {
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            { icon: Users,        label: 'Total Supporters', value: totalDonors.toString(),          color: 'text-navy', bg: 'bg-navy/8' },
-            { icon: Sparkles,     label: 'Active',           value: activeDonors.toString(),         color: 'text-teal', bg: 'bg-teal/10' },
-            { icon: HeartHandshake, label: 'Total Donated',  value: totalDonated, color: 'text-gold', bg: 'bg-gold/10', isCurrency: true },
-          ].map(({ icon: Icon, label, value, color, bg, isCurrency }) => (
-            <div key={label} className="card flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bg}`}>
-                <Icon size={22} className={color} strokeWidth={1.8} />
+          {/* Total Supporters */}
+          <div className="card flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-navy/8">
+              <Users size={22} className="text-navy" strokeWidth={1.8} />
+            </div>
+            <div>
+              <div className="font-display text-2xl font-bold text-navy">{totalDonors}</div>
+              <div className="text-sm text-dark/55 font-medium">Total Supporters</div>
+            </div>
+          </div>
+
+          {/* Active / Churn Risk */}
+          {pageChurn?.available ? (() => {
+            const preds = pageChurn.predictions ?? [];
+            const critical = preds.filter(p => p.risk_tier === 'Critical').length;
+            const high     = preds.filter(p => p.risk_tier === 'High').length;
+            const atRisk   = critical + high;
+            return (
+              <div className="card flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-orange-100">
+                  <Brain size={22} className="text-orange-500" strokeWidth={1.8} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-display text-2xl font-bold text-orange-600">{atRisk}</div>
+                  <div className="text-sm text-dark/55 font-medium">Critical / High Risk</div>
+                  <div className="flex gap-2 mt-1">
+                    <span className="text-xs bg-red-100 text-red-700 rounded-full px-2 py-0.5 font-semibold">{critical} critical</span>
+                    <span className="text-xs bg-orange-100 text-orange-700 rounded-full px-2 py-0.5 font-semibold">{high} high</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })() : (
+            <div className="card flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-teal/10">
+                <Sparkles size={22} className="text-teal" strokeWidth={1.8} />
               </div>
               <div>
-                {isCurrency ? (
-                  <CurrencyDisplay
-                    php={value as number}
-                    usdClassName={`font-display text-2xl font-bold ${color}`}
-                    phpClassName="text-xs text-dark/30 font-normal"
-                  />
-                ) : (
-                  <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
-                )}
-                <div className="text-sm text-dark/55 font-medium">{label}</div>
+                <div className="font-display text-2xl font-bold text-teal">{activeDonors}</div>
+                <div className="text-sm text-dark/55 font-medium">Active</div>
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Total Donated */}
+          <div className="card flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gold/10">
+              <HeartHandshake size={22} className="text-gold" strokeWidth={1.8} />
+            </div>
+            <div>
+              <CurrencyDisplay
+                php={totalDonated}
+                usdClassName="font-display text-2xl font-bold text-gold"
+                phpClassName="text-xs text-dark/30 font-normal"
+              />
+              <div className="text-sm text-dark/55 font-medium">Total Donated</div>
+            </div>
+          </div>
         </div>
 
         {/* Filters */}

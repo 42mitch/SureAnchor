@@ -640,7 +640,14 @@ export default function AdminDashboard() {
           <StatCard
             label="Supporter Health"
             value={loadingDonations ? '—' : `${activeCount} active`}
-            sub={loadingDonations ? '' : `${atRiskCount} at risk of lapsing`}
+            sub={loadingDonations ? '' : (() => {
+              if (churnResult?.available) {
+                const preds = churnResult.predictions ?? [];
+                const atRisk = preds.filter(p => p.risk_tier === 'Critical' || p.risk_tier === 'High').length;
+                return `${atRisk} critical/high risk (ML)`;
+              }
+              return `${atRiskCount} at risk of lapsing`;
+            })()}
             icon={Activity}
             color="bg-teal/10 text-teal"
           />
@@ -1228,42 +1235,69 @@ export default function AdminDashboard() {
 
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-widest text-dark/40 mb-3">
-                  Supporter Health (90-Day Window)
+                  {churnResult?.available ? 'Supporter Churn Risk (ML)' : 'Supporter Health (90-Day Window)'}
                 </h3>
-                <div className="flex items-center gap-6">
-                  <ResponsiveContainer width={130} height={130}>
-                    <PieChart>
-                      <Pie
-                        data={donorStatusData}
-                        cx="50%" cy="50%"
-                        innerRadius={38} outerRadius={58}
-                        paddingAngle={3} dataKey="value"
-                      >
-                        {donorStatusData.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
+                {churnResult?.available ? (() => {
+                  const preds = churnResult.predictions ?? [];
+                  const mlTierData = [
+                    { name: 'Critical', value: preds.filter(p => p.risk_tier === 'Critical').length, color: '#dc2626' },
+                    { name: 'High',     value: preds.filter(p => p.risk_tier === 'High').length,     color: '#ea580c' },
+                    { name: 'Medium',   value: preds.filter(p => p.risk_tier === 'Medium').length,   color: '#eab308' },
+                    { name: 'Low',      value: preds.filter(p => p.risk_tier === 'Low').length,      color: '#22c55e' },
+                  ].filter(d => d.value > 0);
+                  return (
+                    <div className="flex items-center gap-6">
+                      <ResponsiveContainer width={130} height={130}>
+                        <PieChart>
+                          <Pie data={mlTierData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={3} dataKey="value">
+                            {mlTierData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                          </Pie>
+                          <Tooltip formatter={(v, n) => [`${v} supporters`, n]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="space-y-2 flex-1">
+                        {mlTierData.map(item => (
+                          <div key={item.name} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                              <span className="text-dark/60 text-xs font-medium">{item.name}</span>
+                            </div>
+                            <span className="font-bold text-dark text-xs">{item.value}</span>
+                          </div>
                         ))}
-                      </Pie>
-                      <Tooltip formatter={(v, n) => [`${v} supporters`, n]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="space-y-3 flex-1">
-                    {donorStatusData.map(item => (
-                      <div key={item.name} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                          <span className="text-dark/60 text-xs font-medium">{item.name}</span>
+                        <div className="text-xs text-dark/40 pt-0.5">{preds.length} supporters scored</div>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="flex items-center gap-6">
+                    <ResponsiveContainer width={130} height={130}>
+                      <PieChart>
+                        <Pie data={donorStatusData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={3} dataKey="value">
+                          {donorStatusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(v, n) => [`${v} supporters`, n]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-3 flex-1">
+                      {donorStatusData.map(item => (
+                        <div key={item.name} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="text-dark/60 text-xs font-medium">{item.name}</span>
+                          </div>
+                          <span className="font-bold text-dark text-xs">{item.value}</span>
                         </div>
-                        <span className="font-bold text-dark text-xs">{item.value}</span>
-                      </div>
-                    ))}
-                    {atRiskCount > 0 && (
-                      <div className="text-xs text-orange-600 bg-orange-50 rounded-xl p-2 flex gap-2 items-start">
-                        <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-                        <span>{atRiskCount} supporters haven't donated in 90+ days</span>
-                      </div>
-                    )}
+                      ))}
+                      {atRiskCount > 0 && (
+                        <div className="text-xs text-orange-600 bg-orange-50 rounded-xl p-2 flex gap-2 items-start">
+                          <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                          <span>{atRiskCount} supporters haven't donated in 90+ days</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
