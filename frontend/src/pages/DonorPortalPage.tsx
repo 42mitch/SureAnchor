@@ -222,12 +222,12 @@ export default function DonorPortalPage() {
               </div>
               {donations.length > 0 && (
                 <div className="px-6 py-3 border-b border-dark/8 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <select value={donTypeFilter} onChange={e => setDonTypeFilter(e.target.value)}
+                  <select aria-label="Filter by donation type" value={donTypeFilter} onChange={e => setDonTypeFilter(e.target.value)}
                     className="px-3 py-2 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
                     <option value="">All Types</option>
                     {donTypeOptions.map(o => <option key={o}>{o}</option>)}
                   </select>
-                  <select value={donCampaignFilter} onChange={e => setDonCampaignFilter(e.target.value)}
+                  <select aria-label="Filter by campaign" value={donCampaignFilter} onChange={e => setDonCampaignFilter(e.target.value)}
                     className="px-3 py-2 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
                     <option value="">All Campaigns</option>
                     {donCampaignOptions.map(o => <option key={o}>{o}</option>)}
