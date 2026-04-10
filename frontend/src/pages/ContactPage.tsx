@@ -117,8 +117,8 @@ export default function ContactPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-dark mb-1.5">I'm interested in…</label>
-                <select className="w-full px-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm transition-all">
+                <label htmlFor="contact-topic" className="block text-sm font-semibold text-dark mb-1.5">I'm interested in…</label>
+                <select id="contact-topic" className="w-full px-4 py-3 rounded-xl border border-dark/15 bg-cream focus:outline-none focus:ring-2 focus:ring-teal/40 focus:border-teal text-dark text-sm transition-all">
                   <option value="">Select a topic</option>
                   <option>Making a donation</option>
                   <option>Volunteering</option>
