@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  HeartHandshake, Users, UserCircle, Sparkles, Plus, X, Trash2, Search,
+  HeartHandshake, Users, Sparkles, Plus, X, Trash2, Search,
   Mail, Phone, MapPin, Globe, Calendar, TrendingUp, Tag, RefreshCw, Pencil, Brain
 } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
