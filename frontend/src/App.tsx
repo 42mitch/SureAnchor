@@ -56,12 +56,49 @@ function App() {
             </RequireAuth>
           } />
 
-          {/* Admin / Staff pages */}
+          {/* Admin-only pages */}
           <Route path="/admin" element={
-            <RequireAuth roles={['Admin', 'Staff']}>
+            <RequireAuth roles={['Admin']}>
               <AdminDashboard />
             </RequireAuth>
           } />
+          <Route path="/admin/donors" element={
+            <RequireAuth roles={['Admin']}>
+              <DonorsPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/reports" element={
+            <RequireAuth roles={['Admin']}>
+              <ReportsPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/safety" element={
+            <RequireAuth roles={['Admin']}>
+              <SafetyPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/staff-accounts" element={
+            <RequireAuth roles={['Admin']}>
+              <StaffAccountsPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/messages" element={
+            <RequireAuth roles={['Admin']}>
+              <MessagesPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/social-media" element={
+            <RequireAuth roles={['Admin']}>
+              <SocialMediaPage />
+            </RequireAuth>
+          } />
+          <Route path="/admin/safehouse-impact" element={
+            <RequireAuth roles={['Admin']}>
+              <SafehouseImpactPage />
+            </RequireAuth>
+          } />
+
+          {/* Admin + Staff pages */}
           <Route path="/admin/caseload" element={
             <RequireAuth roles={['Admin', 'Staff']}>
               <CaseloadPage />
@@ -70,16 +107,6 @@ function App() {
           <Route path="/admin/process-recording" element={
             <RequireAuth roles={['Admin', 'Staff']}>
               <ProcessRecordingPage />
-            </RequireAuth>
-          } />
-          <Route path="/admin/donors" element={
-            <RequireAuth roles={['Admin', 'Staff']}>
-              <DonorsPage />
-            </RequireAuth>
-          } />
-          <Route path="/admin/reports" element={
-            <RequireAuth roles={['Admin', 'Staff']}>
-              <ReportsPage />
             </RequireAuth>
           } />
           <Route path="/admin/visitations" element={
@@ -96,32 +123,6 @@ function App() {
             <RequireAuth roles={['Admin', 'Staff']}>
               <MyAccountPage />
             </RequireAuth>
-          } />
-
-          <Route path="/admin/social-media" element={
-            <RequireAuth roles={['Admin']}>
-              <SocialMediaPage />
-            </RequireAuth>
-          } />
-          <Route path="/admin/safehouse-impact" element={
-            <RequireAuth roles={['Admin']}>
-              <SafehouseImpactPage />
-            </RequireAuth>
-          } />
-
-          {/* Admin-only pages */}
-          <Route path="/admin/safety" element={
-            <RequireAuth roles={['Admin']}>
-              <SafetyPage />
-            </RequireAuth>
-          } />
-          <Route path="/admin/staff-accounts" element={
-            <RequireAuth roles={['Admin']}>
-              <StaffAccountsPage />
-            </RequireAuth>
-          } />
-          <Route path="/admin/messages" element={
-            <RequireAuth roles={['Admin']}><MessagesPage /></RequireAuth>
           } />
         </Routes>
       </AuthProvider>

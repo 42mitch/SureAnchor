@@ -24,7 +24,11 @@ export default function RequireAuth({ children, roles }: RequireAuthProps) {
   }
 
   if (roles && !roles.some(r => user.roles.includes(r))) {
-    return <Navigate to="/login" replace />;
+    // Already logged in but wrong role — redirect to their home
+    if (user.roles.includes('Admin')) return <Navigate to="/admin" replace />;
+    if (user.roles.includes('Staff')) return <Navigate to="/admin/caseload" replace />;
+    if (user.roles.includes('Donor')) return <Navigate to="/donor" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

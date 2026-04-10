@@ -49,8 +49,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const data: AuthUser = await res.json();
       setUser(data);
-      const destination = data.roles.includes('Admin') || data.roles.includes('Staff')
+      const destination = data.roles.includes('Admin')
         ? '/admin'
+        : data.roles.includes('Staff')
+        ? '/admin/caseload'
         : data.roles.includes('Donor')
         ? '/donor'
         : '/';
