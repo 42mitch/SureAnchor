@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Mail, CheckCircle, RotateCcw, ExternalLink, Filter, Inbox } from 'lucide-react';
+import { Mail, CheckCircle, RotateCcw, ExternalLink, Filter, Inbox, X } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout';
 import { apiFetch } from '../api';
 import { useListPagination } from '../hooks/useListPagination';
@@ -16,16 +16,57 @@ interface ContactMessage {
   resolvedAt: string | null;
 }
 
-type Filter = 'all' | 'unresolved' | 'resolved';
+type FilterType = 'all' | 'unresolved' | 'resolved';
+
+function MessageModal({ msg, onClose }: { msg: ContactMessage; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg animate-fade-in">
+        <div className="px-6 py-5 border-b border-dark/8 flex items-start justify-between">
+          <div>
+            <h2 className="font-display text-lg font-bold text-navy">{msg.name}</h2>
+            <a href={`mailto:${msg.email}`} className="text-sm text-teal hover:underline">{msg.email}</a>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {msg.topic && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-navy/8 text-navy">{msg.topic}</span>
+              )}
+              <span className="text-xs text-dark/40">{msg.createdAt}</span>
+              {msg.isResolved && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Resolved</span>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-dark/30 hover:text-dark/60 transition-colors ml-4 flex-shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          <p className="text-sm text-dark/70 leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+        </div>
+        <div className="px-6 py-4 border-t border-dark/8 flex gap-3">
+          <a href="https://mail.google.com/mail/u/0/#inbox"
+            target="_blank" rel="noopener noreferrer"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-navy text-white text-sm font-semibold hover:bg-navy-light transition-colors">
+            <Mail size={14} /> Open Gmail to Reply
+          </a>
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-dark/15 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function MessagesPage() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [filter, setFilter]     = useState<Filter>('unresolved');
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [filter, setFilter]     = useState<FilterType>('unresolved');
+  const [selectedMsg, setSelectedMsg] = useState<ContactMessage | null>(null);
   const [actioning, setActioning] = useState<number | null>(null);
 
-  function loadMessages(f: Filter) {
+  function loadMessages(f: FilterType) {
     setLoading(true);
     const query = f === 'all' ? '' : `?resolved=${f === 'resolved'}`;
     apiFetch(`/api/contact-messages${query}`)
@@ -62,35 +103,28 @@ export default function MessagesPage() {
   return (
     <AdminLayout>
       <div className="space-y-5 animate-fade-in">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold text-navy">Messages</h1>
             <p className="text-dark/50 text-sm mt-1">Contact form submissions from the public site</p>
           </div>
-          <a
-            href="https://mail.google.com/mail/u/0/#inbox"
+          <a href="https://mail.google.com/mail/u/0/#inbox"
             target="_blank" rel="noopener noreferrer"
-            className="btn-primary text-sm flex items-center gap-2 self-start sm:self-auto"
-          >
-            <ExternalLink size={15} />
-            Open Gmail Inbox
+            className="btn-primary text-sm flex items-center gap-2 self-start sm:self-auto">
+            <ExternalLink size={15} /> Open Gmail Inbox
           </a>
         </div>
 
-        {/* Filter tabs */}
         <div className="card py-3">
           <div className="flex items-center gap-2">
             <Filter size={14} className="text-dark/30" />
-            {(['unresolved', 'all', 'resolved'] as Filter[]).map(f => (
+            {(['unresolved', 'all', 'resolved'] as FilterType[]).map(f => (
               <button key={f} onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${
-                  filter === f
-                    ? 'bg-navy text-white'
-                    : 'text-dark/50 hover:bg-dark/6 hover:text-dark'
+                  filter === f ? 'bg-navy text-white' : 'text-dark/50 hover:bg-dark/6 hover:text-dark'
                 }`}>
                 {f}
-                {f === 'unresolved' && filter !== 'resolved' && unresolvedCount > 0 && (
+                {f === 'unresolved' && unresolvedCount > 0 && (
                   <span className="ml-1.5 bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
                     {unresolvedCount}
                   </span>
@@ -100,7 +134,6 @@ export default function MessagesPage() {
           </div>
         </div>
 
-        {/* Messages list */}
         <div className="card overflow-hidden p-0">
           {loading ? (
             <div className="flex justify-center py-16">
@@ -120,63 +153,40 @@ export default function MessagesPage() {
                   <div key={msg.contactMessageId}
                     className={`p-5 transition-colors ${msg.isResolved ? 'bg-dark/2' : 'bg-white'}`}>
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className="flex items-start gap-3 min-w-0 flex-1 cursor-pointer"
+                        onClick={() => setSelectedMsg(msg)}>
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
                           msg.isResolved ? 'bg-green-100' : 'bg-teal/10'
                         }`}>
                           {msg.isResolved
                             ? <CheckCircle size={16} className="text-green-600" />
-                            : <Mail size={16} className="text-teal" />
-                          }
+                            : <Mail size={16} className="text-teal" />}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-sm text-navy">{msg.name}</span>
                             {msg.topic && (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-navy/8 text-navy">
-                                {msg.topic}
-                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-navy/8 text-navy">{msg.topic}</span>
                             )}
                             {msg.isResolved && (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                                Resolved
-                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Resolved</span>
                             )}
                           </div>
-                          <a href={`mailto:${msg.email}`}
-                            className="text-xs text-teal hover:underline">{msg.email}</a>
+                          <p className="text-xs text-teal">{msg.email}</p>
                           <p className="text-xs text-dark/40 mt-0.5">{msg.createdAt}</p>
-
-                          {/* Message preview / expanded */}
-                          <div className="mt-2">
-                            {expanded === msg.contactMessageId ? (
-                              <>
-                                <p className="text-sm text-dark/70 leading-relaxed whitespace-pre-wrap">
-                                  {msg.message}
-                                </p>
-                                <button onClick={() => setExpanded(null)}
-                                  className="text-xs text-teal mt-1 hover:underline">
-                                  Show less
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <p className="text-sm text-dark/60 line-clamp-2">{msg.message}</p>
-                                {msg.message.length > 120 && (
-                                  <button onClick={() => setExpanded(msg.contactMessageId)}
-                                    className="text-xs text-teal mt-1 hover:underline">
-                                    Read more
-                                  </button>
-                                )}
-                              </>
-                            )}
-                          </div>
+                          <p className="text-sm text-dark/60 mt-1.5 line-clamp-2">{msg.message}</p>
+                          {msg.message.length > 120 && (
+                            <button onClick={e => { e.stopPropagation(); setSelectedMsg(msg); }}
+                              className="text-xs text-teal mt-0.5 hover:underline">
+                              Read more
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      {/* Actions */}
                       <div className="flex flex-col gap-2 flex-shrink-0">
-                        <a href={`mailto:${msg.email}?subject=Re: Your SureAnchor message`}
+                        <a href="https://mail.google.com/mail/u/0/#inbox"
+                          target="_blank" rel="noopener noreferrer"
                           className="px-3 py-1.5 rounded-lg border border-teal/30 text-teal text-xs font-semibold hover:bg-teal/6 transition-colors flex items-center gap-1.5">
                           <Mail size={12} /> Reply
                         </a>
@@ -207,6 +217,10 @@ export default function MessagesPage() {
           )}
         </div>
       </div>
+
+      {selectedMsg && (
+        <MessageModal msg={selectedMsg} onClose={() => setSelectedMsg(null)} />
+      )}
     </AdminLayout>
   );
 }
