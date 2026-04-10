@@ -18,13 +18,10 @@ public class InterventionPlansController : ControllerBase
     [HttpGet("upcoming-conferences")]
     public async Task<IActionResult> GetUpcomingConferences()
     {
-        // Show conferences that have a scheduled date and are not yet completed/closed
-        // This includes both future conferences and recent past conferences that are still active
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var conferences = await _db.InterventionPlans
             .Include(p => p.Resident)
-            .Where(p => p.CaseConferenceDate.HasValue
-                     && p.Status != "Achieved"
-                     && p.Status != "Closed")
+            .Where(p => p.CaseConferenceDate.HasValue && p.CaseConferenceDate.Value >= today)
             .OrderBy(p => p.CaseConferenceDate)
             .Take(10)
             .Select(p => new UpcomingConferenceDto(
