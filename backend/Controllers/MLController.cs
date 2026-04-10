@@ -215,6 +215,197 @@ public class MLController : ControllerBase
     }
 
     // =========================================================================
+    // Batch health trajectory — all active residents; returns only red/yellow
+    // GET /api/ml/health-trajectory-batch
+    // =========================================================================
+    [HttpGet("health-trajectory-batch")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetHealthTrajectoryBatch()
+    {
+        var today = DateTime.UtcNow;
+        var now   = DateOnly.FromDateTime(today);
+        var ago30 = DateOnly.FromDateTime(today.AddDays(-30));
+        var ago60 = DateOnly.FromDateTime(today.AddDays(-60));
+
+        var residents = await _db.Residents
+            .Where(r => r.Status == "Active")
+            .ToListAsync();
+
+        if (!residents.Any())
+            return Ok(new { available = true, atRisk = Array.Empty<object>() });
+
+        var ids = residents.Select(r => r.ResidentId).ToList();
+
+        // Bulk-load all related data in 4 queries instead of 4 × N
+        var allHealth    = await _db.HealthWellbeingRecords
+            .Where(h => ids.Contains(h.ResidentId))
+            .OrderBy(h => h.RecordDate)
+            .ToListAsync();
+        var allSessions  = await _db.ProcessRecordings
+            .Where(s => ids.Contains(s.ResidentId))
+            .ToListAsync();
+        var allIncidents = await _db.IncidentReports
+            .Where(i => ids.Contains(i.ResidentId))
+            .ToListAsync();
+        var allPlans     = await _db.InterventionPlans
+            .Where(p => ids.Contains(p.ResidentId))
+            .ToListAsync();
+
+        var healthMap    = allHealth   .GroupBy(h => h.ResidentId).ToDictionary(g => g.Key, g => g.OrderBy(h => h.RecordDate).ToList());
+        var sessionMap   = allSessions .GroupBy(s => s.ResidentId).ToDictionary(g => g.Key, g => g.ToList());
+        var incidentMap  = allIncidents.GroupBy(i => i.ResidentId).ToDictionary(g => g.Key, g => g.ToList());
+        var planMap      = allPlans    .GroupBy(p => p.ResidentId).ToDictionary(g => g.Key, g => g.ToList());
+
+        static int RiskOrd(string? r) => r switch {
+            "Low" => 0, "Medium" => 1, "High" => 2, "Critical" => 3, _ => 1
+        };
+
+        // Score all residents in parallel (bounded)
+        var semaphore = new System.Threading.SemaphoreSlim(6);
+        var tasks = residents.Select(async resident =>
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                var id           = resident.ResidentId;
+                var healthRecs   = healthMap  .GetValueOrDefault(id) ?? [];
+                var sessions     = sessionMap .GetValueOrDefault(id) ?? [];
+                var incidents    = incidentMap.GetValueOrDefault(id) ?? [];
+                var plans        = planMap    .GetValueOrDefault(id) ?? [];
+
+                var latest    = healthRecs.LastOrDefault();
+                double genH   = (double)(latest?.GeneralHealthScore ?? 3);
+                double nutr   = (double)(latest?.NutritionScore     ?? 3);
+                double sleep  = (double)(latest?.SleepQualityScore  ?? 3);
+                double energy = (double)(latest?.EnergyLevelScore   ?? 3);
+                double bmi    = (double)(latest?.Bmi                ?? 22);
+
+                double lag1 = healthRecs.Count >= 2 ? (double)(healthRecs[^2].GeneralHealthScore ?? (decimal)genH)  : genH;
+                double lag2 = healthRecs.Count >= 3 ? (double)(healthRecs[^3].GeneralHealthScore ?? (decimal)lag1) : lag1;
+
+                var last3H = healthRecs.TakeLast(3).Select(h => (double)(h.GeneralHealthScore ?? 3)).ToList();
+                double hTrend = last3H.Count >= 2 ? last3H.Last() - last3H.First() : 0;
+
+                var last3N = healthRecs.TakeLast(3).Select(h => (double)(h.NutritionScore ?? 3)).ToList();
+                double nTrend = last3N.Count >= 2 ? last3N.Last() - last3N.First() : 0;
+
+                var last2H  = healthRecs.TakeLast(2).Select(h => (double)(h.GeneralHealthScore ?? 3)).ToList();
+                double roll = last2H.Count > 0 ? last2H.Average() : genH;
+
+                var recentSess   = sessions.Where(s => s.SessionDate >= ago30).ToList();
+                int sess30       = recentSess.Count;
+                double avgDur    = sess30 > 0 ? recentSess.Average(s => (double)(s.SessionDurationMinutes ?? 60)) : 0;
+                double pctProg   = sessions.Count > 0 ? sessions.Count(s => s.ProgressNoted)     / (double)sessions.Count : 0;
+                double pctConc   = sessions.Count > 0 ? sessions.Count(s => s.ConcernsFlagged)   / (double)sessions.Count : 0;
+
+                var positiveEnd  = new HashSet<string> { "Hopeful", "Calm", "Reflective" };
+                var negativeStart= new HashSet<string> { "Anxious", "Distressed", "Withdrawn" };
+                var improvable   = sessions.Where(s =>
+                    !string.IsNullOrEmpty(s.EmotionalStateObserved) &&
+                    negativeStart.Contains(s.EmotionalStateObserved) &&
+                    !string.IsNullOrEmpty(s.EmotionalStateEnd)).ToList();
+                double emoRate   = improvable.Count > 0
+                    ? improvable.Count(s => positiveEnd.Contains(s.EmotionalStateEnd!)) / (double)improvable.Count : 0;
+
+                var recentInc    = incidents.Where(i => i.IncidentDate >= ago60).ToList();
+                int inc60        = recentInc.Count;
+                int highInc60    = recentInc.Count(i => i.Severity is "High" or "Critical");
+                double pctRes    = incidents.Count > 0 ? incidents.Count(i => i.Resolved) / (double)incidents.Count : 1.0;
+                int selfHarm     = incidents.Any(i => i.IncidentType?.Contains("Self")    == true) ? 1 : 0;
+                int medInc       = incidents.Any(i => i.IncidentType?.Contains("Medical") == true) ? 1 : 0;
+
+                int activePlans  = plans.Count(p => p.Status is "In Progress" or "Pending");
+                double pctAch    = plans.Count > 0 ? plans.Count(p => p.Status == "Completed") / (double)plans.Count : 0;
+                int hasPhys      = plans.Any(p => p.PlanCategory == "Health")       ? 1 : 0;
+                int hasPsycho    = plans.Any(p => p.PlanCategory == "Psychosocial") ? 1 : 0;
+
+                double los = resident.DateOfAdmission.HasValue
+                    ? (now.DayNumber - resident.DateOfAdmission.Value.DayNumber) / 30.44 : 6;
+
+                int medChk = (latest?.MedicalCheckupDone       == true) ? 1 : 0;
+                int denChk = (latest?.DentalCheckupDone        == true) ? 1 : 0;
+                int psyChk = (latest?.PsychologicalCheckupDone == true) ? 1 : 0;
+
+                var payload = new
+                {
+                    general_health_score                  = genH,
+                    nutrition_score                       = nutr,
+                    sleep_score                           = sleep,
+                    energy_score                          = energy,
+                    bmi                                   = bmi,
+                    health_score_lag1                     = lag1,
+                    health_score_lag2                     = lag2,
+                    health_trend_3mo                      = hTrend,
+                    nutrition_trend_3mo                   = nTrend,
+                    rolling_avg_health_2mo                = roll,
+                    sessions_last_30_days                 = sess30,
+                    avg_session_duration_last_30_days     = avgDur,
+                    pct_sessions_progress_noted           = pctProg,
+                    pct_sessions_concerns_flagged         = pctConc,
+                    emotional_improvement_rate            = emoRate,
+                    incidents_last_60_days                = inc60,
+                    high_severity_incidents_last_60_days  = highInc60,
+                    pct_incidents_resolved                = pctRes,
+                    active_plans_count                    = activePlans,
+                    pct_plans_achieved_to_date            = pctAch,
+                    initial_risk_level_ord                = RiskOrd(resident.InitialRiskLevel),
+                    current_risk_level_ord                = RiskOrd(resident.CurrentRiskLevel),
+                    length_of_stay_months                 = los,
+                    medical_checkup_done                  = medChk,
+                    dental_checkup_done                   = denChk,
+                    psychological_checkup_done            = psyChk,
+                    has_selfharm_incident                 = selfHarm,
+                    has_medical_incident                  = medInc,
+                    has_physical_health_plan              = hasPhys,
+                    has_psychosocial_plan                 = hasPsycho,
+                    is_pwd                                = resident.IsPwd             ? 1 : 0,
+                    has_special_needs                     = resident.HasSpecialNeeds   ? 1 : 0,
+                    sub_cat_trafficked                    = resident.SubCatTrafficked  ? 1 : 0,
+                    sub_cat_sexual_abuse                  = resident.SubCatSexualAbuse ? 1 : 0,
+                    sub_cat_physical_abuse                = resident.SubCatPhysicalAbuse ? 1 : 0,
+                    family_is_4ps                         = resident.FamilyIs4Ps       ? 1 : 0,
+                    family_solo_parent                    = resident.FamilySoloParent  ? 1 : 0,
+                };
+
+                var mlResult = await PostToMl<JsonElement?>("/predict/health-trajectory", payload);
+                if (mlResult == null) return null;
+
+                mlResult.Value.TryGetProperty("available",            out var avProp);
+                mlResult.Value.TryGetProperty("alert_level",          out var alProp);
+                mlResult.Value.TryGetProperty("trajectory",           out var trProp);
+                mlResult.Value.TryGetProperty("declining_probability",out var dpProp);
+                mlResult.Value.TryGetProperty("recommended_action",   out var raProp);
+
+                if (avProp.ValueKind != JsonValueKind.True) return null;
+                var alertLevel = alProp.GetString() ?? "green";
+                if (alertLevel == "green") return null;   // only surface red + yellow
+
+                return (object?)new
+                {
+                    residentId          = id,
+                    internalCode        = resident.InternalCode,
+                    safehouse           = resident.Safehouse,
+                    worker              = resident.AssignedSocialWorker,
+                    alertLevel,
+                    trajectory          = trProp.GetString() ?? "Stable",
+                    decliningProbability= dpProp.ValueKind == JsonValueKind.Number ? dpProp.GetDouble() : 0.0,
+                    recommendedAction   = raProp.GetString() ?? "",
+                };
+            }
+            finally { semaphore.Release(); }
+        });
+
+        var results = await Task.WhenAll(tasks);
+        var atRisk  = results
+            .Where(r => r != null)
+            .OrderByDescending(r => ((dynamic)r!).alertLevel == "red" ? 1 : 0)
+            .ThenByDescending(r => ((dynamic)r!).decliningProbability)
+            .ToList();
+
+        return Ok(new { available = true, atRisk });
+    }
+
+    // =========================================================================
     // Reintegration readiness for a single resident
     // GET /api/ml/residents/{id}/reintegration
     // =========================================================================
