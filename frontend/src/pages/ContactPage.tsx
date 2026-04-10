@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Mail, MapPin, Heart, Send, CheckCircle } from 'lucide-react';
 import PublicLayout from '../layouts/PublicLayout';
 import { apiFetch } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 const TOPICS = [
   'General Inquiry',
@@ -13,7 +14,8 @@ const TOPICS = [
 ];
 
 export default function ContactPage() {
-  const [form, setForm] = useState({ name: '', email: '', topic: '', message: '' });
+  const { user } = useAuth();
+  const [form, setForm] = useState({ name: '', email: user?.email ?? '', topic: '', message: '' });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError]     = useState('');
