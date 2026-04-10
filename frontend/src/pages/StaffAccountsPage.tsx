@@ -370,13 +370,13 @@ export default function StaffAccountsPage() {
                 placeholder="Search by name or email..."
                 className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30" />
             </div>
-            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+            <select aria-label="Filter by role" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
               <option value="">Role</option>
               <option value="Admin">Admin</option>
               <option value="Staff">Staff</option>
             </select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            <select aria-label="Filter by account status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
               <option value="">Account Status</option>
               <option value="Active">Active</option>

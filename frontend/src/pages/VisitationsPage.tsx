@@ -688,18 +688,18 @@ export default function VisitationsPage() {
                     placeholder="Search by resident, worker, or type..."
                     className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30" />
                 </div>
-                <select value={visitTypeFilter} onChange={e => setVisitTypeFilter(e.target.value)}
+                <select aria-label="Filter by visit type" value={visitTypeFilter} onChange={e => setVisitTypeFilter(e.target.value)}
                   className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
                   <option value="">Visit Type</option>
                   {visitTypeOptions.map(o => <option key={o}>{o}</option>)}
                 </select>
-                <select value={safetyConcernFilter} onChange={e => setSafetyConcernFilter(e.target.value)}
+                <select aria-label="Filter by safety concern" value={safetyConcernFilter} onChange={e => setSafetyConcernFilter(e.target.value)}
                   className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
                   <option value="">Safety Concern</option>
                   <option value="Yes">Yes</option>
                   <option value="No">No</option>
                 </select>
-                <select value={followUpFilter} onChange={e => setFollowUpFilter(e.target.value)}
+                <select aria-label="Filter by follow-up needed" value={followUpFilter} onChange={e => setFollowUpFilter(e.target.value)}
                   className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
                   <option value="">Follow-up Needed</option>
                   <option value="Yes">Yes</option>

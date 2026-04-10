@@ -1410,7 +1410,7 @@ export default function DonorsPage() {
                 placeholder="Search by name or email..."
                 className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm focus:outline-none focus:ring-2 focus:ring-teal/30 focus:border-teal placeholder-dark/30" />
             </div>
-            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+            <select aria-label="Filter by supporter type" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
               <option value="">Supporter Type</option>
               <option value="MonetaryDonor">Monetary Donor</option>
@@ -1420,7 +1420,7 @@ export default function DonorsPage() {
               <option value="SocialMediaAdvocate">Social Media Advocate</option>
               <option value="PartnerOrganization">Partner Organization</option>
             </select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            <select aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-dark/12 bg-cream text-sm text-dark/60 focus:outline-none focus:ring-2 focus:ring-teal/30">
               <option value="">Status</option>
               <option value="Active">Active</option>
