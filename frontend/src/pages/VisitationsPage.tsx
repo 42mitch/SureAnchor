@@ -113,6 +113,7 @@ function VisitDetailModal({ visitId, onClose, onDelete, isAdmin }: {
 }) {
   const [visit, setVisit] = useState<VisitationDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [residentPlans, setResidentPlans] = useState<InterventionPlan[]>([]);
 
   useEffect(() => {
     apiFetch(`/api/home-visitations/${visitId}`)
@@ -136,6 +137,9 @@ function VisitDetailModal({ visitId, onClose, onDelete, isAdmin }: {
             familyMembersPresent: data.familyMembersPresent,
             followUpNotes: data.followUpNotes,
           });
+          apiFetch(`/api/intervention-plans?residentId=${data.residentId}`)
+            .then(r => r.ok ? r.json() : [])
+            .then(setResidentPlans);
         }
       })
       .finally(() => setLoading(false));
@@ -243,6 +247,83 @@ function VisitDetailModal({ visitId, onClose, onDelete, isAdmin }: {
               <p className="text-sm text-dark leading-relaxed">{visit.followUpNotes || 'Follow-up needed (no notes provided)'}</p>
             </div>
           )}
+
+          {/* ── Case Conferences for this resident ── */}
+          {(() => {
+            const withDate = residentPlans.filter(p => p.caseConferenceDate);
+            const upcoming = withDate
+              .filter(p => daysDiff(p.caseConferenceDate!) >= 0)
+              .sort((a, b) => a.caseConferenceDate!.localeCompare(b.caseConferenceDate!));
+            const past = withDate
+              .filter(p => daysDiff(p.caseConferenceDate!) < 0)
+              .sort((a, b) => b.caseConferenceDate!.localeCompare(a.caseConferenceDate!));
+            return (
+              <div className="space-y-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-dark/40 flex items-center gap-2">
+                  <Calendar size={12} aria-hidden="true" /> Case Conferences
+                </p>
+                {withDate.length === 0 ? (
+                  <p className="text-xs text-dark/40 bg-cream rounded-xl px-4 py-3">No case conferences scheduled for this resident.</p>
+                ) : (
+                  <>
+                    {upcoming.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-dark/40 mb-2">Upcoming</p>
+                        <div className="space-y-2">
+                          {upcoming.map(plan => {
+                            const diff = daysDiff(plan.caseConferenceDate!);
+                            const dt = formatConferenceDate(plan.caseConferenceDate!);
+                            const isToday = diff === 0;
+                            return (
+                              <div key={plan.planId} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${isToday ? 'bg-amber-50 border-amber-200' : 'bg-cream border-dark/8'}`}>
+                                <div className="flex-shrink-0 w-10 text-center bg-white rounded-lg border border-dark/10 py-1">
+                                  <p className="text-xs font-semibold text-dark/40 uppercase">{dt.month}</p>
+                                  <p className="text-base font-bold text-navy leading-tight">{dt.day}</p>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-dark">{plan.planCategory}</p>
+                                  <p className="text-xs text-dark/50">{isToday ? 'Today' : diff === 1 ? 'Tomorrow' : `In ${diff} days`}</p>
+                                </div>
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS[plan.status] ?? 'bg-dark/8 text-dark/50'}`}>{plan.status}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {past.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-dark/40 mb-2">History</p>
+                        <div className="space-y-2">
+                          {past.slice(0, 3).map(plan => {
+                            const diff = daysDiff(plan.caseConferenceDate!);
+                            const dt = formatConferenceDate(plan.caseConferenceDate!);
+                            return (
+                              <div key={plan.planId} className="flex items-center gap-3 rounded-xl px-3 py-2.5 border border-dark/8 bg-white opacity-70">
+                                <div className="flex-shrink-0 w-10 text-center bg-cream rounded-lg border border-dark/8 py-1">
+                                  <p className="text-xs font-semibold text-dark/40 uppercase">{dt.month}</p>
+                                  <p className="text-base font-bold text-dark/60 leading-tight">{dt.day}</p>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-dark/70">{plan.planCategory}</p>
+                                  <p className="text-xs text-dark/40">{Math.abs(diff)} day{Math.abs(diff) !== 1 ? 's' : ''} ago</p>
+                                </div>
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS[plan.status] ?? 'bg-dark/8 text-dark/50'}`}>{plan.status}</span>
+                              </div>
+                            );
+                          })}
+                          {past.length > 3 && (
+                            <p className="text-xs text-dark/40 text-center">+{past.length - 3} older conference{past.length - 3 !== 1 ? 's' : ''}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-dark/12 text-dark/60 text-sm font-semibold hover:bg-cream transition-colors">Close</button>
             {isAdmin && (

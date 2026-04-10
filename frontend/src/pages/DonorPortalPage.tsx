@@ -7,7 +7,6 @@ import ValidationModal from '../components/ValidationModal';
 import { useListPagination } from '../hooks/useListPagination';
 import ListPaginationBar from '../components/ListPaginationBar';
 import { CurrencyDisplay, CurrencyDisplayDetailed } from '../components/CurrencyDisplay';
-import { phpToUsd } from '../utils/currency';
 import { COUNTRIES } from '../utils/countries';
 import UnconfirmedEmailBanner from '../components/UnconfirmedEmailBanner';
 
